@@ -229,6 +229,20 @@ jupyter notebook   # 或 jupyter lab，打开 evaluate_VIP5.ipynb
 
 9. **`gdown --folder` 报错或只下了一部分**
    → Google Drive 文件夹文件多会被限流；改为逐子文件夹下载，或浏览器手动下载再上传。
+   注意 `gdown` 走 `drive.google.com`，**国内网络通常需要代理/VPN**才能访问。
+
+10. **建环境时卡在 `git clone https://github.com/openai/CLIP.git ... Failed to connect to github.com`**
+    → 这是**网络问题，不是版本问题**：你的机器连不上 `github.com`（国内常见）。
+    而且 **CLIP 根本用不到**（`src/`、`notebooks/` 里没有任何 `import clip`，它只用于
+    从原图重新提取特征，而你用 Google Drive 的预提取 `.npy` 特征即可）。
+    本仓库已把 CLIP 从默认安装里移除，正常 `conda env create -f environment.yml` 不会再触发它。
+    若你**确实**要装 CLIP（自行提特征），单独走 github 镜像：
+    ```bash
+    pip install ftfy regex Pillow
+    git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+    pip install git+https://github.com/openai/CLIP.git
+    # 镜像站时有失效，可换成当前可用的 github 加速镜像
+    ```
 
 ---
 
