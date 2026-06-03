@@ -279,12 +279,32 @@ export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_pr
 ### 8.3 代理只在本地电脑上？用 SSH 反向隧道把它带到服务器
 
 若代理（clash/v2ray 等，假设本地端口 7890）跑在你**自己的电脑**上，服务器用不了。
-从**本地电脑**这样连服务器，把本地代理「借」给服务器：
+原理：用 SSH 反向隧道，让服务器的 `127.0.0.1:7890` 转发回本地的代理。
+
+**命令行 SSH：** 从**本地电脑**执行（保持会话开着）：
 ```bash
-# 在本地电脑执行：服务器的 127.0.0.1:7890 会转发回本地的 7890
-ssh -R 7890:127.0.0.1:7890 mlsnrs@<服务器IP>
+ssh -fNR 7890:127.0.0.1:7890 mlsnrs@<服务器IP>
 ```
-然后在**服务器**上 `export https_proxy=http://127.0.0.1:7890`，git/pip/gdown 即可联网。
+
+**VS Code Remote-SSH（推荐，复用现有连接，无需另开终端）：**
+在**本地**的 SSH 配置（VS Code 命令面板 → `Remote-SSH: Open SSH Configuration File...`，
+通常是 `~/.ssh/config`）里，给你连的那台主机加一行 `RemoteForward`：
+```
+Host myserver
+    HostName <服务器IP>
+    User mlsnrs
+    RemoteForward 7890 127.0.0.1:7890
+```
+保存后**重连** VS Code（命令面板 → `Remote-SSH: Close Remote Connection` 再重新连）。
+
+之后在**服务器**的终端里设代理，git/pip/gdown/huggingface 即可联网：
+```bash
+export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890
+# 若代理是 SOCKS5（如 7891），下数据时再加： export all_proxy=socks5://127.0.0.1:7891
+```
+> 端口要对上你本地代理的实际监听端口（Clash 一般 HTTP 7890 / SOCKS 7891；v2rayN 一般
+> HTTP 10809 / SOCKS 10808）。若服务器 7890 被占，换个远程端口，如
+> `RemoteForward 17890 127.0.0.1:7890`，服务器端就用 17890。
 
 ### 8.4 测试是否通
 
