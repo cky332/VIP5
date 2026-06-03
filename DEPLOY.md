@@ -220,9 +220,14 @@ jupyter notebook   # 或 jupyter lab，打开 evaluate_VIP5.ipynb
    → 本代码按 torch 1.x 的 `torch.distributed.launch`（传 `--local_rank` 下划线）写的。
    请用 **torch 1.12**；torch 2.x 的 launcher 传的是 `--local-rank`（连字符）会对不上。
 
-7. **`CUDA out of memory`**
-   → 调小 batch（单卡脚本用 `BATCH_SIZE=...`），或减小 `image_feature_size_ratio`、
-   `max_text_length`，或用更少的 `--losses`。
+7. **`CUDA out of memory`**（默认 `--batch_size 36` 需要约 32GB+ 显存；24GB 卡如 3090/4090/A5000 会 OOM）
+   → 用 `BATCH_SIZE` 环境变量调小（两个脚本都支持了），24GB 卡建议 12（不够再降到 8）：
+   ```bash
+   BATCH_SIZE=12 CUDA_VISIBLE_DEVICES=0,1,2,3 bash scripts/train_VIP5.sh 4 toys 13579 vitb32 2 8 20
+   ```
+   想保持等效 batch 可配合 `--gradient_accumulation_steps`；也可减小 `max_text_length` /
+   `image_feature_size_ratio`，或用更少的 `--losses`。
+   还可加 `PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128` 缓解碎片。
 
 8. **下载 `t5-small` 失败 / 内网无外网**
    → 见 5.3，预先缓存 + `TRANSFORMERS_OFFLINE=1`。

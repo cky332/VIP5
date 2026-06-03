@@ -1,12 +1,19 @@
 # Run with $ CUDA_VISIBLE_DEVICES=0,1,2,3 bash scripts/train_VIP5.sh 4 [toys, clothing, beauty, sports] 13579 vitb32 2 8 20
+#
+# batch_size defaults to 36 (needs ~32GB+ per GPU). On 24GB GPUs you WILL hit
+# CUDA out-of-memory; lower it via the BATCH_SIZE env var, e.g.:
+#   BATCH_SIZE=12 CUDA_VISIBLE_DEVICES=0,1,2,3 bash scripts/train_VIP5.sh 4 toys 13579 vitb32 2 8 20
 
 #!/bin/bash
 
 split=$2
 img_feat_type=$4
 img_feat_size_ratio=$5
+batch_size=${BATCH_SIZE:-36}
 name=$split-$img_feat_type-$img_feat_size_ratio-$6-$7
 output=snap/$name
+
+mkdir -p snap log
 
 PYTHONPATH=$PYTHONPATH:./src \
 python -m torch.distributed.launch \
@@ -17,7 +24,7 @@ python -m torch.distributed.launch \
         --seed 2022 \
         --train $split \
         --valid $split \
-        --batch_size 36 \
+        --batch_size $batch_size \
         --optim adamw \
         --warmup_ratio 0.1 \
         --lr 1e-3 \
