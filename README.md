@@ -3,14 +3,21 @@ VIP5: Towards Multimodal Foundation Models for Recommendation
 
 ![Teaser](figure/vip5_teaser.png)
 
-## Dependencies: 
-- PyTorch 1.12
-- transformers
-- tqdm
-- numpy
-- sentencepiece
-- pyyaml
+## Dependencies:
+- Python 3.9
+- PyTorch 1.12.1 (+ CUDA 11.3)
+- transformers **==4.17.0** (hard pin — newer versions renamed/removed symbols this code imports)
+- sacremoses (required at import by transformers 4.17.0)
+- huggingface_hub==0.8.1, tokenizers==0.12.1
+- numpy==1.23.5, tqdm, sentencepiece, pyyaml
 - pip install git+https://github.com/openai/CLIP.git
+
+> **Quick start:** see [`DEPLOY.md`](DEPLOY.md) for a full step-by-step guide
+> (中文), and use the provided [`environment.yml`](environment.yml) /
+> [`requirements.txt`](requirements.txt) for a one-command, version-pinned setup:
+> ```
+> conda env create -f environment.yml && conda activate vip5
+> ```
 
 ## Usage
 

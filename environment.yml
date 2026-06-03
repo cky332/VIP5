@@ -1,0 +1,43 @@
+# VIP5 conda environment (Linux + Anaconda, GPU)
+#
+# Create with:   conda env create -f environment.yml
+# Activate with: conda activate vip5
+#
+# This is the GPU build (CUDA 11.3). If you have NO GPU and only want to run the
+# evaluation notebook on CPU, replace the `cudatoolkit=11.3` line with `cpuonly`
+# (note: TRAINING requires at least one NVIDIA GPU — it uses the NCCL backend).
+#
+# Version pins are deliberate: the code imports transformers symbols that were
+# renamed/removed after 4.17.0, and torch's `torch.distributed.launch` passes
+# `--local_rank` (with an underscore) only up to torch 1.x, which this code expects.
+name: vip5
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  # ---- PyTorch 1.12.1 + CUDA 11.3 (from the official pytorch channel) ----
+  - pytorch==1.12.1
+  - torchvision==0.13.1
+  - torchaudio==0.12.1
+  - cudatoolkit=11.3
+  # ---- everything else via pip ----
+  - pip:
+      - transformers==4.17.0
+      - sacremoses
+      - huggingface_hub==0.8.1
+      - tokenizers==0.12.1
+      - sentencepiece==0.1.97
+      - pyyaml==6.0
+      - numpy==1.23.5
+      - tqdm==4.64.1
+      - packaging==21.3
+      - ftfy
+      - regex
+      - Pillow
+      - gdown
+      - jupyter
+      - ipykernel
+      - git+https://github.com/openai/CLIP.git
