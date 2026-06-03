@@ -10,7 +10,8 @@ VIP5: Towards Multimodal Foundation Models for Recommendation
 - sacremoses (required at import by transformers 4.17.0)
 - huggingface_hub==0.8.1, tokenizers==0.12.1
 - numpy==1.23.5, tqdm, sentencepiece, pyyaml
-- pip install git+https://github.com/openai/CLIP.git
+- (optional) CLIP — only needed to re-extract image features; not required when
+  using the precomputed features from Google Drive: `pip install git+https://github.com/openai/CLIP.git`
 
 > **Quick start:** see [`DEPLOY.md`](DEPLOY.md) for a full step-by-step guide
 > (中文), and use the provided [`environment.yml`](environment.yml) /

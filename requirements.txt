@@ -21,14 +21,25 @@ numpy==1.23.5            # numpy 2.x breaks torch 1.12 / old transformers
 tqdm==4.64.1
 packaging==21.3
 
-# Image-feature extraction with CLIP (only needed if you regenerate features
-# yourself; the Google Drive download already contains precomputed .npy features)
-ftfy
-regex
-Pillow
-git+https://github.com/openai/CLIP.git
-
 # Utilities: data download from Google Drive + running the evaluation notebook
 gdown
 jupyter
 ipykernel
+
+# ---------------------------------------------------------------------------
+# OPTIONAL: CLIP — ONLY needed if you want to re-extract image features from raw
+# images yourself. The Google Drive download already ships precomputed .npy
+# features, and NOTHING in src/ or notebooks/ imports `clip`, so you can skip
+# this entirely for training/evaluation.
+#
+# It is commented out on purpose: it installs from github.com, which is often
+# unreachable in some networks (e.g. mainland China) and will abort the whole
+# install. If you really need it, install it SEPARATELY, e.g. via a git mirror:
+#   pip install ftfy regex Pillow
+#   git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+#   pip install git+https://github.com/openai/CLIP.git
+# ---------------------------------------------------------------------------
+# ftfy
+# regex
+# Pillow
+# git+https://github.com/openai/CLIP.git

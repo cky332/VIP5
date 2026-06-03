@@ -34,10 +34,12 @@ dependencies:
       - numpy==1.23.5
       - tqdm==4.64.1
       - packaging==21.3
-      - ftfy
-      - regex
-      - Pillow
       - gdown
       - jupyter
       - ipykernel
-      - git+https://github.com/openai/CLIP.git
+      # NOTE: CLIP (git+https://github.com/openai/CLIP.git) is intentionally NOT
+      # listed here. It installs from github.com (often unreachable in some
+      # networks and would abort `conda env create`), and the code never imports
+      # `clip` — it is only for re-extracting image features, which you don't need
+      # because the Google Drive download already ships precomputed .npy features.
+      # If you ever need it, install it separately; see DEPLOY.md / requirements.txt.

@@ -220,15 +220,106 @@ jupyter notebook   # 或 jupyter lab，打开 evaluate_VIP5.ipynb
    → 本代码按 torch 1.x 的 `torch.distributed.launch`（传 `--local_rank` 下划线）写的。
    请用 **torch 1.12**；torch 2.x 的 launcher 传的是 `--local-rank`（连字符）会对不上。
 
-7. **`CUDA out of memory`**
-   → 调小 batch（单卡脚本用 `BATCH_SIZE=...`），或减小 `image_feature_size_ratio`、
-   `max_text_length`，或用更少的 `--losses`。
+7. **`CUDA out of memory`**（默认 `--batch_size 36` 需要约 32GB+ 显存；24GB 卡如 3090/4090/A5000 会 OOM）
+   → 用 `BATCH_SIZE` 环境变量调小（两个脚本都支持了），24GB 卡建议 12（不够再降到 8）：
+   ```bash
+   BATCH_SIZE=12 CUDA_VISIBLE_DEVICES=0,1,2,3 bash scripts/train_VIP5.sh 4 toys 13579 vitb32 2 8 20
+   ```
+   想保持等效 batch 可配合 `--gradient_accumulation_steps`；也可减小 `max_text_length` /
+   `image_feature_size_ratio`，或用更少的 `--losses`。
+   还可加 `PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128` 缓解碎片。
 
 8. **下载 `t5-small` 失败 / 内网无外网**
    → 见 5.3，预先缓存 + `TRANSFORMERS_OFFLINE=1`。
 
 9. **`gdown --folder` 报错或只下了一部分**
    → Google Drive 文件夹文件多会被限流；改为逐子文件夹下载，或浏览器手动下载再上传。
+   注意 `gdown` 走 `drive.google.com`，**国内网络通常需要代理/VPN**才能访问。
+
+10. **建环境时卡在 `git clone https://github.com/openai/CLIP.git ... Failed to connect to github.com`**
+    → 这是**网络问题，不是版本问题**：你的机器连不上 `github.com`（国内常见）。
+    而且 **CLIP 根本用不到**（`src/`、`notebooks/` 里没有任何 `import clip`，它只用于
+    从原图重新提取特征，而你用 Google Drive 的预提取 `.npy` 特征即可）。
+    本仓库已把 CLIP 从默认安装里移除，正常 `conda env create -f environment.yml` 不会再触发它。
+    若你**确实**要装 CLIP（自行提特征），单独走 github 镜像：
+    ```bash
+    pip install ftfy regex Pillow
+    git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+    pip install git+https://github.com/openai/CLIP.git
+    # 镜像站时有失效，可换成当前可用的 github 加速镜像
+    ```
+
+---
+
+## 8. 国内网络：访问 github / huggingface / Google Drive
+
+本项目部署会碰到三个境外服务：**github**（可选，装 CLIP 用）、**huggingface.co**
+（必需，下 `t5-small`）、**Google Drive**（必需，下数据/特征）。国内服务器通常都连不上。
+
+### 8.1 优先用「域名镜像」，多数情况不用代理
+
+| 服务 | 用途 | 镜像/办法（无需代理） |
+|------|------|----------------------|
+| PyPI | 装 Python 包 | 清华源 `https://pypi.tuna.tsinghua.edu.cn/simple`（你已在用） |
+| huggingface | 下 `t5-small` 权重 | `export HF_ENDPOINT=https://hf-mirror.com` 后再训练（强烈推荐） |
+| github | 装 CLIP（可选） | `git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"` |
+| Google Drive | 下数据/特征 | 镜像难，基本只能靠代理或在能联网的机器下好再 `scp` 上传 |
+
+### 8.2 有代理时（最通用，一次解决三者）
+
+git 走 HTTP/SOCKS 代理（把地址换成你的）：
+```bash
+git config --global http.proxy  http://127.0.0.1:7890     # SOCKS5 用 socks5://127.0.0.1:7891
+git config --global https.proxy http://127.0.0.1:7890
+# 只给 github 走代理（不影响国内站）：
+git config --global http.https://github.com.proxy http://127.0.0.1:7890
+# 用完取消：
+git config --global --unset http.proxy && git config --global --unset https.proxy
+```
+其它命令（pip / curl / gdown / huggingface）走代理，用环境变量：
+```bash
+export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7891
+```
+
+### 8.3 代理只在本地电脑上？用 SSH 反向隧道把它带到服务器
+
+若代理（clash/v2ray 等，假设本地端口 7890）跑在你**自己的电脑**上，服务器用不了。
+原理：用 SSH 反向隧道，让服务器的 `127.0.0.1:7890` 转发回本地的代理。
+
+**命令行 SSH：** 从**本地电脑**执行（保持会话开着）：
+```bash
+ssh -fNR 7890:127.0.0.1:7890 mlsnrs@<服务器IP>
+```
+
+**VS Code Remote-SSH（推荐，复用现有连接，无需另开终端）：**
+在**本地**的 SSH 配置（VS Code 命令面板 → `Remote-SSH: Open SSH Configuration File...`，
+通常是 `~/.ssh/config`）里，给你连的那台主机加一行 `RemoteForward`：
+```
+Host myserver
+    HostName <服务器IP>
+    User mlsnrs
+    RemoteForward 7890 127.0.0.1:7890
+```
+保存后**重连** VS Code（命令面板 → `Remote-SSH: Close Remote Connection` 再重新连）。
+
+之后在**服务器**的终端里设代理，git/pip/gdown/huggingface 即可联网：
+```bash
+export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890
+# 若代理是 SOCKS5（如 7891），下数据时再加： export all_proxy=socks5://127.0.0.1:7891
+```
+> 端口要对上你本地代理的实际监听端口（Clash 一般 HTTP 7890 / SOCKS 7891；v2rayN 一般
+> HTTP 10809 / SOCKS 10808）。若服务器 7890 被占，换个远程端口，如
+> `RemoteForward 17890 127.0.0.1:7890`，服务器端就用 17890。
+
+### 8.4 测试是否通
+
+```bash
+curl -I --connect-timeout 10 https://github.com        # 返回 HTTP 200/301 即通
+git ls-remote https://github.com/openai/CLIP.git | head # 能列出引用即通
+```
+
+> 对本项目而言：**github 非必需**（CLIP 可跳过）；最该解决的是 **huggingface**（用
+> `HF_ENDPOINT=https://hf-mirror.com` 通常免代理即可）和 **Google Drive**（多半得靠代理）。
 
 ---
 
