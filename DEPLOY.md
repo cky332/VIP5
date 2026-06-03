@@ -246,6 +246,58 @@ jupyter notebook   # 或 jupyter lab，打开 evaluate_VIP5.ipynb
 
 ---
 
+## 8. 国内网络：访问 github / huggingface / Google Drive
+
+本项目部署会碰到三个境外服务：**github**（可选，装 CLIP 用）、**huggingface.co**
+（必需，下 `t5-small`）、**Google Drive**（必需，下数据/特征）。国内服务器通常都连不上。
+
+### 8.1 优先用「域名镜像」，多数情况不用代理
+
+| 服务 | 用途 | 镜像/办法（无需代理） |
+|------|------|----------------------|
+| PyPI | 装 Python 包 | 清华源 `https://pypi.tuna.tsinghua.edu.cn/simple`（你已在用） |
+| huggingface | 下 `t5-small` 权重 | `export HF_ENDPOINT=https://hf-mirror.com` 后再训练（强烈推荐） |
+| github | 装 CLIP（可选） | `git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"` |
+| Google Drive | 下数据/特征 | 镜像难，基本只能靠代理或在能联网的机器下好再 `scp` 上传 |
+
+### 8.2 有代理时（最通用，一次解决三者）
+
+git 走 HTTP/SOCKS 代理（把地址换成你的）：
+```bash
+git config --global http.proxy  http://127.0.0.1:7890     # SOCKS5 用 socks5://127.0.0.1:7891
+git config --global https.proxy http://127.0.0.1:7890
+# 只给 github 走代理（不影响国内站）：
+git config --global http.https://github.com.proxy http://127.0.0.1:7890
+# 用完取消：
+git config --global --unset http.proxy && git config --global --unset https.proxy
+```
+其它命令（pip / curl / gdown / huggingface）走代理，用环境变量：
+```bash
+export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7891
+```
+
+### 8.3 代理只在本地电脑上？用 SSH 反向隧道把它带到服务器
+
+若代理（clash/v2ray 等，假设本地端口 7890）跑在你**自己的电脑**上，服务器用不了。
+从**本地电脑**这样连服务器，把本地代理「借」给服务器：
+```bash
+# 在本地电脑执行：服务器的 127.0.0.1:7890 会转发回本地的 7890
+ssh -R 7890:127.0.0.1:7890 mlsnrs@<服务器IP>
+```
+然后在**服务器**上 `export https_proxy=http://127.0.0.1:7890`，git/pip/gdown 即可联网。
+
+### 8.4 测试是否通
+
+```bash
+curl -I --connect-timeout 10 https://github.com        # 返回 HTTP 200/301 即通
+git ls-remote https://github.com/openai/CLIP.git | head # 能列出引用即通
+```
+
+> 对本项目而言：**github 非必需**（CLIP 可跳过）；最该解决的是 **huggingface**（用
+> `HF_ENDPOINT=https://hf-mirror.com` 通常免代理即可）和 **Google Drive**（多半得靠代理）。
+
+---
+
 ## 附：本仓库为部署新增/修改的文件
 
 - `environment.yml`：一键创建 conda 环境（含正确版本锁）。
