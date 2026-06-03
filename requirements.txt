@@ -1,0 +1,34 @@
+# VIP5 Python dependencies (pip)
+#
+# IMPORTANT: install PyTorch FIRST and separately, because the correct build
+# depends on your CUDA version. See DEPLOY.md. The recommended combo is:
+#
+#   PyTorch 1.12.1 + CUDA 11.3 (Python 3.8 / 3.9)
+#   conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch
+#
+# The code imports transformers symbols T5DenseReluDense / T5DenseGatedGeluDense
+# (renamed to *ActDense in transformers 4.18) and BeamSearchScorer (removed in
+# 4.40). Verified compatible version: transformers==4.17.0. This is a HARD pin —
+# do not bump it without patching src/modeling_vip5.py.
+
+transformers==4.17.0
+sacremoses               # hard import-time dependency of transformers 4.17.0
+huggingface_hub==0.8.1   # 0.11+ removed cached_download which transformers 4.17.0 imports
+tokenizers==0.12.1       # satisfies tokenizers>=0.11.1,!=0.11.3 required by 4.17.0
+sentencepiece==0.1.97
+pyyaml==6.0
+numpy==1.23.5            # numpy 2.x breaks torch 1.12 / old transformers
+tqdm==4.64.1
+packaging==21.3
+
+# Image-feature extraction with CLIP (only needed if you regenerate features
+# yourself; the Google Drive download already contains precomputed .npy features)
+ftfy
+regex
+Pillow
+git+https://github.com/openai/CLIP.git
+
+# Utilities: data download from Google Drive + running the evaluation notebook
+gdown
+jupyter
+ipykernel
