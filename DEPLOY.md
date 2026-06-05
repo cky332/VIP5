@@ -180,22 +180,34 @@ BATCH_SIZE=12 CUDA_VISIBLE_DEVICES=0 bash scripts/train_VIP5_single_gpu.sh toys
 
 ## 6. 评估（生成推荐 / 解释，算指标）
 
-评估走 notebook：`notebooks/evaluate_VIP5.ipynb`
+### 6.1 命令行脚本（推荐，不用开 notebook）
+
+本仓库提供了 `evaluate_vip5.py`（等价于评估 notebook），在**项目根目录**直接跑：
 
 ```bash
 conda activate vip5
-cd notebooks
-jupyter notebook   # 或 jupyter lab，打开 evaluate_VIP5.ipynb
+# 先只跑 explanation 验证流程（最快）
+python evaluate_vip5.py --tasks explanation \
+    --load snap/toys-vitb32-2-8-20/BEST_EVAL_LOSS.pth
+# 跑全部三类任务（sequential/direct 用 beam search，较慢且吃显存）
+python evaluate_vip5.py \
+    --split toys --image_feature_type vitb32 --image_feature_size_ratio 2 --reduction_factor 8 \
+    --load snap/toys-vitb32-2-8-20/BEST_EVAL_LOSS.pth
 ```
 
-在 notebook 里需要设置：
-- `args.split`（如 `"toys"`）、`args.backbone='t5-small'`、`args.image_feature_type` 等，
-  要与训练时一致；
-- `args.load = "../snap/vip5_toys.pth"`：指向训练得到的 checkpoint
-  （或作者在 Google Drive 提供的预训练权重，放到 `snap/` 下）。
+常用开关：`--batch_size`（OOM 调小，如 4）、`--first_template_only`（每任务只跑一个模板省时间）、
+`--tasks explanation,sequential,direct`（选任务）、`CUDA_VISIBLE_DEVICES=1 python ...`（指定卡）。
+评测配置已和 `train_VIP5.sh` 对齐（含 `use_lm_head_adapter=False`），`--load` 指向你训练出的
+checkpoint 即可。输出 explanation 的 BLEU/ROUGE，sequential/direct 的 NDCG/Recall/Hit/MAP/MRR。
 
-> notebook 里默认 `model = model.cuda()`，**默认需要 GPU**。纯 CPU 评估需把 `.cuda()`
-> 改成 `.to('cpu')` 并把 `args.fp16` 关掉，速度会很慢。
+### 6.2 Notebook（交互式）
+
+也可用 `notebooks/evaluate_VIP5.ipynb`（VS Code 打开，选 `vip5` kernel，逐 cell 运行）。
+关键：`args.use_lm_head_adapter=False`（对齐训练）、`args.load` 指向你的 checkpoint、cell 0
+顶部设 `HUGGINGFACE_CO_RESOLVE_ENDPOINT=https://hf-mirror.com`。
+
+> 评估**默认需要 GPU**（`model.cuda()`）。配置（split/backbone/image_feature_type/
+> size_ratio/reduction_factor/max_text_length）必须与训练时一致，否则权重对不上。
 
 ---
 
