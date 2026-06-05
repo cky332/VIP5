@@ -10,7 +10,11 @@ log/
 data/
 features/
 downloads/
+vip5/
 *.pth
+
+# Attack experiment outputs
+attack/out/
 
 # Env
 .venv/
