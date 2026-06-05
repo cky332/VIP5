@@ -172,7 +172,7 @@ def load_ckpt(model, path):
     if res.unexpected_keys:
         print("       e.g. unexpected:", res.unexpected_keys[:5])
     if len(res.unexpected_keys) > 0:
-        print("       [警告] 有 unexpected_keys，说明 checkpoint 与当前配置不完全一致，请检查训练参数是否对齐")
+        print("       [warn] unexpected_keys present: checkpoint may not match the current config")
     model.eval()
 
 
@@ -225,6 +225,10 @@ def eval_ranking(args, model, task_type, template, ks):
                 pred[int(info["gen_item_list"][j])] = -(j + 1)
             except Exception:
                 pass
+        if not pred:
+            # 模型没生成任何合法 item id：记为一次 miss（放一个必然错误的占位项），
+            # 否则空预测会让 evaluate_once 里 topk=0 触发 assert 崩溃。
+            pred[-1] = -(10 ** 9)
         ui_scores[i] = pred
     print(f"\n========== {task_type} [{template}] ==========")
     for k in ks:
@@ -272,7 +276,7 @@ def main():
         if cli.first_template_only:
             templates = templates[:1]
         if task in ("sequential", "direct"):
-            print(f"\n[note] {task} 用 beam search(num_beams=20)，较慢且吃显存；OOM 请减小 --batch_size")
+            print(f"\n[note] {task}: beam search (num_beams=20), slow & memory-heavy; lower --batch_size if OOM")
         for tmpl in templates:
             if task == "explanation":
                 eval_explanation(args, model, tmpl)
