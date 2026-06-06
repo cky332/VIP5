@@ -1,5 +1,9 @@
 # VIP5 热门质心模仿攻击:实验结果
 
+> **攻击针对 VIP5 的「直接推荐(direct, B 类模板)」任务**——候选商品 ID 及其封面图都在输入中,
+> 所以扰动候选封面会改变模型对该候选的打分。序列推荐(A 类)的下一个商品是**生成**的、不在输入里,
+> 故本攻击不适用于序列推荐(那里只有历史商品的图在输入中)。下文 §3 为 pointwise(B-1),§5 为 listwise(B-8)。
+>
 > 学术安全鲁棒性研究。数据集 **toys**,backbone **t5-small + vitb32(CLIP ViT-B/32)**,
 > n_vis_tokens=2,reduction=8,checkpoint `snap/toys-vitb32-2-8-20/BEST_EVAL_LOSS.pth`。
 > 攻击预算 **L∞ ≤ 16/255**,PGD 200 步。
