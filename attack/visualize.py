@@ -86,7 +86,7 @@ def make_row(asin, item2img, item2id, amp):
     diff_vis = np.clip(0.5 + delta * amp, 0, 1)
     gap = np.ones((CW, GAP, 3), dtype="uint8") * 255
     imgs = np.concatenate([_u8(clean), gap, _u8(adv), gap, _u8(diff_vis)], axis=1)
-    label = "item %s (%s)   Linf=%.1f/255   mean|d|=%.2f/255" % (
+    label = "item %s (%s)   max|d|=%.0f/255   mean|d|=%.2f/255" % (
         item2id.get(asin, "?"), asin, linf, meanabs)
     block = np.concatenate([_band(text_left=label), imgs], axis=0)
     stats = {"asin": asin, "item": item2id.get(asin, "?"),
