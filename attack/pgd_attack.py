@@ -61,7 +61,7 @@ def _save_png(x_chw, path):
 def attack_item(asin, image_path, centroid, normalize, device=None):
     device = device or C.DEVICE
     from PIL import Image
-    x0 = CE.preprocess_to_224(Image.open(image_path))           # (3,224,224) [0,1]
+    x0 = CE.preprocess_to_224(Image.open(image_path)).to(device)   # (3,224,224) [0,1]
     with torch.no_grad():
         clean_feat = CE.encode_pixels(x0.unsqueeze(0), normalize=normalize, device=device)[0]
     x_adv = pgd_attack_pixels(x0, centroid, normalize, device)
