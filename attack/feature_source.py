@@ -24,7 +24,7 @@ def shipped(dataset, item_id_str):
 def _load(path):
     if not os.path.isfile(path):
         raise FileNotFoundError(path + " (run the upstream step first)")
-    return np.load(path).astype("float32")
+    return np.load(path).astype("float32").reshape(-1)
 
 
 def poisoned(asin):

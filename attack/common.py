@@ -165,4 +165,4 @@ def shipped_feature_path(asin):
 
 
 def load_shipped(asin):
-    return np.load(shipped_feature_path(asin)).astype("float32")
+    return np.load(shipped_feature_path(asin)).astype("float32").reshape(-1)
