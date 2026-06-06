@@ -109,21 +109,47 @@ def load_item2img(path=None):
     return pickle.load(open(path or C.ITEM2IMG, "rb"))
 
 
+_PHOTO_INDEX = None
+
+
+def _photo_index(photos_dir):
+    """basename -> full path, built once by walking photos_dir (bulletproof fallback)."""
+    global _PHOTO_INDEX
+    if _PHOTO_INDEX is None:
+        _PHOTO_INDEX = {}
+        for root, _dirs, files in os.walk(photos_dir):
+            for f in files:
+                _PHOTO_INDEX.setdefault(f, os.path.join(root, f))
+        print("[clip_extract] indexed %d image files under %s" % (len(_PHOTO_INDEX), photos_dir))
+    return _PHOTO_INDEX
+
+
 def resolve_image_path(asin, item2img, photos_dir=None):
-    """Best-effort asin -> image file path (handles filename/url/path values)."""
+    """asin -> image file path. item2img values look like 'toys_photos/<file>.jpg'
+    and the zip unpacks to <photos_dir>/photos/<cat>_photos/<file>.jpg, so we try
+    several base dirs and fall back to a basename index that tolerates any nesting."""
     photos_dir = photos_dir or C.PHOTOS_DIR
-    cands = []
     v = item2img.get(asin) if isinstance(item2img, dict) else None
+    bases = [photos_dir, os.path.join(photos_dir, "photos"),
+             os.path.join(photos_dir, "vip5_photos"), "."]
+    cands = []
+    base_name = None
     if v is not None:
-        base = os.path.basename(str(v).split("?")[0])
-        cands += [str(v), os.path.join(photos_dir, str(v)),
-                  os.path.join(photos_dir, base)]
+        v = str(v).split("?")[0]
+        base_name = os.path.basename(v)
+        for b in bases:
+            cands.append(os.path.join(b, v))        # join the relative value
+            cands.append(os.path.join(b, base_name))  # join just the filename
     for ext in (".jpg", ".jpeg", ".png"):
         cands.append(os.path.join(photos_dir, asin + ext))
     for c in cands:
         if c and os.path.isfile(c):
             return c
-    # last resort: recursive search by basename (slow; only first time)
+    # bulletproof fallback: look the filename up in the recursive index
+    if base_name:
+        hit = _photo_index(photos_dir).get(base_name)
+        if hit:
+            return hit
     return None
 
 
