@@ -24,7 +24,9 @@ SEQDATA        = "data/{split}/sequential_data.txt".format(split=SPLIT)
 DATAMAPS       = "data/{split}/datamaps.json".format(split=SPLIT)
 
 # ---- attack hyper-params ----
-K_POPULAR      = 20                  # top-K popular items -> centroid
+K_POPULAR      = 20                  # "mean" 模式:取 top-K 热门求平均
+CENTROID_MODE  = "mean"              # 攻击目标:"mean"=top-K 热门平均质心 ; "top1"=单个最热门商品的特征
+TARGET_ITEM    = None                # 指定具体商品ID(str/int)作目标;非 None 时覆盖 CENTROID_MODE
 N_NEG          = 20                  # negatives per user (1 pos + 20 neg = 21)
 EPSILON        = 16.0 / 255.0        # L-inf budget on pixels
 PGD_STEPS      = 200
