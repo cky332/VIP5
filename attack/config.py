@@ -70,6 +70,10 @@ XT_MOMENTUM       = 0.9               # reward EMA factor m
 XT_DPRIME_MODE    = "single"          # "single" (per-target, chosen) | "universal" (one delta for a sample)
 XT_DPRIME_SIZE    = 64                # universal mode only: #covers sampled into D'
 
+# Attack TARGET embedding (what each surrogate's (cover+delta) is pulled toward):
+XT_CENTROID_MODE  = "top1"            # "top1": single MOST-popular item's image (default) | "mean": top-K avg
+XT_TARGET_ITEM    = None              # specific item id (str/int); overrides XT_CENTROID_MODE when set
+
 # Black-box surrogate search space (MUST exclude the victim OpenAI ViT-B/32).
 # entry = {"backend": "open_clip"|"openai_clip", "name": <model>, "pretrained": <tag|None>}
 XT_SEARCH_SPACE_OPENCLIP = [

@@ -2,10 +2,11 @@
 single-target popularity-mimicry attack.
 
 Craft a pixel perturbation delta on an ENSEMBLE of surrogate CLIP encoders (UCB
-surrogate scaling), pulling each surrogate's embedding of (cover + delta) toward that
-surrogate's popular centroid -- WITHOUT touching the victim. Then re-extract the
-perturbed cover with the VICTIM (OpenAI ViT-B/32) to obtain the 512-d feature VIP5
-consumes. delta lives in the 224x224 [0,1] deployable-cover space.
+surrogate scaling), pulling each surrogate's embedding of (cover + delta) toward the
+attack target -- by default the single MOST-popular item's image (XT_CENTROID_MODE),
+optionally the top-K mean or a specific XT_TARGET_ITEM -- WITHOUT touching the victim.
+Then re-extract the perturbed cover with the VICTIM (OpenAI ViT-B/32) to obtain the
+512-d feature VIP5 consumes. delta lives in the 224x224 [0,1] deployable-cover space.
 
 Threat model (per the approved plan): victim ViT-B/32 is held out of the surrogate
 pool; transfer is proven by the victim-space "transfer probe" (poisoned cos-to-centroid
@@ -69,7 +70,7 @@ def xtransfer_delta(X, space, centroids, eps=C.XT_EPS, alpha=C.XT_ALPHA,
             feat = s.encode(x)                          # (B, d_i)
             cos = F.cosine_similarity(feat, centroids[i].to(device)).mean()
             if targeted:
-                Li = 1.0 - cos                          # pull toward popular centroid
+                Li = 1.0 - cos                          # pull toward target (hottest item by default)
             else:
                 with torch.no_grad():
                     cf = s.encode(torch.clamp(xb, 0, 1))  # degrade: push away from clean

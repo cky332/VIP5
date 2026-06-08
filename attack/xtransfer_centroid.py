@@ -1,5 +1,10 @@
-"""Per-surrogate "popular centroid": for each surrogate encoder, the mean image
-embedding (in that encoder's OWN space) of the top-K most-interacted items' covers.
+"""Per-surrogate attack TARGET embedding: for each surrogate encoder, the image
+embedding (in that encoder's OWN space) of the chosen popular item(s).
+
+Default (XT_CENTROID_MODE="top1"): the single MOST-popular item's cover -> "look like
+the hottest product". Alternatives: "mean" (top-K average centroid) or a specific
+XT_TARGET_ITEM. When the target is a single item the "centroid" is just that item's
+embedding (mean over 1).
 
 Reuses build_centroid.topk_popular (popularity is encoder-agnostic) and clip_extract
 for image resolution + the VICTIM pipeline (used only for the sanity centroid).
@@ -47,19 +52,39 @@ def _centroid_path(sid):
     return os.path.join(C.XT_CENTROID_DIR, sid + ".npy")
 
 
-def build_all_centroids(dataset, k=C.K_POPULAR, batch=16, device=None):
-    """Build + cache one centroid per surrogate (native dim), plus a victim ViT-B/32
-    centroid (sanity metric only). One surrogate is GPU-resident at a time."""
+def _target_items(dataset, mode, target_item, k):
+    """Item set whose covers define the target embedding (mirrors
+    build_centroid.build_centroid): a specific item, the single hottest item, or
+    the top-K set (averaged)."""
+    if target_item is not None:
+        return [(str(target_item), -1)]
+    if mode == "top1":
+        return BC.topk_popular(dataset, 1)
+    return BC.topk_popular(dataset, k)
+
+
+def build_all_centroids(dataset, k=C.K_POPULAR, mode=None, target_item=None,
+                        batch=16, device=None):
+    """Build + cache one target embedding per surrogate (native dim), plus a victim
+    ViT-B/32 target (sanity metric only). One surrogate is GPU-resident at a time.
+
+    mode/target_item default to config (XT_CENTROID_MODE / XT_TARGET_ITEM): 'top1'
+    uses the single most-popular item, 'mean' averages the top-K, and a set
+    target_item pins one specific item."""
     FXT.ensure_xt_dirs()
     device = device or C.DEVICE
-    pops = BC.topk_popular(dataset, k)
+    mode = mode if mode is not None else getattr(C, "XT_CENTROID_MODE", "top1")
+    target_item = target_item if target_item is not None else getattr(C, "XT_TARGET_ITEM", None)
+    pops = _target_items(dataset, mode, target_item, k)
     item2img = CE.load_item2img()
     covers, used = _stack_covers(dataset, pops, item2img)
     covers = covers.to(device)
 
-    meta = {"k": k, "n_covers": len(used),
+    eff_mode = "target_item" if target_item is not None else mode
+    meta = {"mode": eff_mode, "k": (1 if eff_mode != "mean" else k), "n_covers": len(used),
             "items": [{"item": i, "count": c} for i, c in pops],
             "surrogates": {}}
+    print("[xt-centroid] target = %s | items = %s" % (eff_mode, [i for i, _ in pops]))
 
     space = SUR.build_search_space(device)
     for s in space:

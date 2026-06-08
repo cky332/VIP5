@@ -54,9 +54,11 @@ python attack/run_all.py listwise               # 辅评测(原生 B-8 生成式
 
 上面的 PGD 攻击是**白盒·单 CLIP·单品**:前提是能精确复刻平台那版 CLIP(ViT-B/32)。
 X-Transfer 变体去掉这个前提——在一个**替身 CLIP 集成**上构造扰动(每步用 UCB 老虎机挑 k 个替身,
-即 surrogate scaling),使「只改图」的扰动能**迁移到未知/黑盒的 CLIP**。目标仍是「热门质心模仿」
-(把替身嵌入推向各自的热门质心),因此能**抬高候选排名**;受害者 ViT-B/32 被**留出**,仅在最后用于
-重提取被污染特征以证明迁移。默认 `XT_DPRIME_MODE="single"`(单品定向,最贴合「抬高我的某个候选」)。
+即 surrogate scaling),使「只改图」的扰动能**迁移到未知/黑盒的 CLIP**。攻击目标默认是
+**单个最热门商品的图片嵌入**(`XT_CENTROID_MODE="top1"`,即把候选封面推得「像最热门那件」),
+因此能**抬高候选排名**;也可切到 `"mean"`(top-K 质心)或 `XT_TARGET_ITEM=<id>`(指定某件商品)。
+受害者 ViT-B/32 被**留出**,仅在最后用于重提取被污染特征以证明迁移。默认
+`XT_DPRIME_MODE="single"`(单品定向,最贴合「抬高我的某个候选」)。
 
 > 威胁模型:攻击者改封面 → 平台用某个(未知的)公开 CLIP 重提特征 → VIP5 消费。攻击只需白盒一批
 > **替身** CLIP,**既不需要 VIP5 梯度,也不需要平台那版 CLIP**。
@@ -71,8 +73,8 @@ python attack/run_all.py xt-centroid xt-attack xt-eval
 cat attack/out/xtransfer/results/xtransfer_pointwise.json
 ```
 
-- `xt-centroid`:为**每个替身**在其自身空间建热门质心 → `attack/out/xtransfer/centroids/`;
-  同时建一个**受害者** ViT-B/32 质心(仅作迁移探针的健全性指标)。
+- `xt-centroid`:为**每个替身**在其自身空间建目标嵌入(默认=最热门单品)→ `attack/out/xtransfer/centroids/`;
+  同时建一个**受害者** ViT-B/32 目标(仅作迁移探针的健全性指标)。
 - `xt-attack`:逐目标构造黑盒 δ,用**受害者**重提取 clean/poisoned 特征(512 维,不做 L2 归一化,
   与出厂特征一致)→ `attack/out/xtransfer/{poisoned,clean}_features/<split>/`;
   产物 `xt_attack_summary.json` 含 **transfer_probe_ok**(被污染特征是否比 clean 更贴近受害者质心——
