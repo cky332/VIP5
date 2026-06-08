@@ -63,9 +63,20 @@ X-Transfer 变体去掉这个前提——在一个**替身 CLIP 集成**上构�
 > 威胁模型:攻击者改封面 → 平台用某个(未知的)公开 CLIP 重提特征 → VIP5 消费。攻击只需白盒一批
 > **替身** CLIP,**既不需要 VIP5 梯度,也不需要平台那版 CLIP**。
 
-前置:在 `clip` 阶段解析出 `CLIP_NORM` 之后再跑。替身池默认用 `open_clip`(`pip install open_clip_torch`,
-首次会从 HF 下权重,可 `export HF_ENDPOINT=https://hf-mirror.com`);若不便装,设
-`attack/config.py` 里 `XT_USE_OPEN_CLIP=False` 退回「仅 OpenAI clip」池(免新依赖)。
+前置:在 `clip` 阶段解析出 `CLIP_NORM` 之后再跑。替身池有两种:
+
+- **最省事(推荐先跑通):** 设 `attack/config.py` 里 `XT_USE_OPEN_CLIP=False`,用本仓库已装的
+  **OpenAI clip** 作替身池(RN50/101/x4 + ViT-B/16 + L/14 + L/14@336px,排除受害者 ViT-B/32),
+  **无需任何新依赖**,与现有 pinned 环境零冲突。
+- **忠于论文的多样池(open_clip):** ⚠️ 本仓库把 `huggingface_hub==0.8.1` 死锁给了
+  `transformers==4.17.0`,直接 `pip install open_clip_torch` 可能升级 `huggingface_hub`/`timm`
+  **从而弄坏 VIP5**。请用:
+  ```bash
+  pip install --no-deps open_clip_torch==2.20.0   # 保住 huggingface_hub==0.8.1
+  export HF_ENDPOINT=https://hf-mirror.com         # 替身权重走镜像
+  ```
+  默认 open_clip 池已是 **timm-free**(纯 ViT/RN),故 `--no-deps` 即可用;若 `import open_clip`
+  仍因 hf_hub 0.8.1 报错,就退回上面那条 OpenAI 池,或给 open_clip 单开一个 conda 环境。
 
 ```bash
 python attack/run_all.py clip                      # 解析 CLIP_NORM(只需一次)

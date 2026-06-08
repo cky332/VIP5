@@ -79,14 +79,28 @@ class Surrogate:
         if self.model is not None:
             return self
         if self.backend == "open_clip":
-            import open_clip
+            try:
+                import open_clip
+            except ImportError as e:
+                raise RuntimeError(
+                    "open_clip not installed for the X-Transfer surrogate pool. Either:\n"
+                    "  (a) set XT_USE_OPEN_CLIP=False in attack/config.py to use the "
+                    "OpenAI-clip-only pool (no new deps; works with the existing env), or\n"
+                    "  (b) pip install --no-deps open_clip_torch==2.20.0  (keeps the "
+                    "huggingface_hub==0.8.1 pin that transformers==4.17.0 requires; "
+                    "see attack/README.md).") from e
             model, _, preprocess = open_clip.create_model_and_transforms(
                 self.name, pretrained=self.pretrained, device="cpu")
             self._mean, self._std = _meanstd_from_preprocess(preprocess)
             self.input_res = _res_from_visual(model)
             self.output_dim = getattr(getattr(model, "visual", None), "output_dim", None)
         elif self.backend == "openai_clip":
-            import clip
+            try:
+                import clip
+            except ImportError as e:
+                raise RuntimeError(
+                    "OpenAI clip not installed; pip install "
+                    "git+https://github.com/openai/CLIP.git (see attack/README.md).") from e
             model, _ = clip.load(self.name, device="cpu", jit=False)  # cpu => fp32
             self._mean, self._std = _OPENAI_MEAN, _OPENAI_STD
             self.input_res = _res_from_visual(model)

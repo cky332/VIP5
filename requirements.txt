@@ -45,11 +45,16 @@ ipykernel
 # git+https://github.com/openai/CLIP.git
 
 # ---------------------------------------------------------------------------
-# OPTIONAL: open_clip — ONLY needed for the X-Transfer attack (attack/surrogates.py),
-# which builds the surrogate ensemble (diverse LAION/DataComp/MetaCLIP CLIP encoders).
-# Pin a release compatible with torch 1.12 (newer ones may require torch >= 1.13). If
-# install would upgrade torch, set XT_USE_OPEN_CLIP=False in attack/config.py to fall
-# back to the OpenAI-clip-only surrogate pool (no new deps). Weights download from HF —
-# use a mirror if needed: export HF_ENDPOINT=https://hf-mirror.com
+# OPTIONAL: open_clip — ONLY for the X-Transfer attack's DIVERSE surrogate pool
+# (attack/surrogates.py). The OpenAI-clip-only pool (XT_USE_OPEN_CLIP=False) needs
+# nothing new and is the recommended default.
+#
+# WARNING: this repo pins huggingface_hub==0.8.1 for transformers==4.17.0. A plain
+# `pip install open_clip_torch` may upgrade huggingface_hub/timm and BREAK VIP5.
+# Install without touching deps, and keep the default timm-free ViT/RN pool:
+#   pip install --no-deps open_clip_torch==2.20.0
+#   export HF_ENDPOINT=https://hf-mirror.com   # surrogate weights via mirror
+# If `import open_clip` then fails on huggingface_hub 0.8.1, use a separate conda
+# env for open_clip, or just set XT_USE_OPEN_CLIP=False.
 # ---------------------------------------------------------------------------
-# open_clip_torch==2.20.0
+# open_clip_torch==2.20.0   # install with --no-deps (see above)
