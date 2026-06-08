@@ -67,35 +67,51 @@ def _feature_for(dataset, item_str, source, normalize, item2img=None, clip_loade
     return CE.extract_feature(ip, normalize=normalize)
 
 
-def build_centroid(dataset, source="shipped", k=C.K_POPULAR):
+def build_centroid(dataset, source="shipped", k=C.K_POPULAR, mode=None, target_item=None):
+    """attack target written to centroid.npy:
+       - mode='mean' (default): average CLIP feature of the top-K popular items
+       - mode='top1'          : the single MOST-popular item's CLIP feature
+       - target_item=<id>     : a specific item's CLIP feature (overrides mode)
+    pgd_attack / eval read centroid.npy unchanged regardless of mode."""
     common.ensure_dirs()
+    mode = mode if mode is not None else getattr(C, "CENTROID_MODE", "mean")
+    target_item = target_item if target_item is not None else getattr(C, "TARGET_ITEM", None)
     flag = resolve_norm_flag()
     if flag is None:
         flag = _shipped_norm_autodetect(dataset) if source == "shipped" else True
-    pops = topk_popular(dataset, k)
+
+    # 选择构成"目标特征"的商品集合
+    if target_item is not None:
+        pops = [(str(target_item), -1)]            # 指定的某个具体商品
+    elif mode == "top1":
+        pops = topk_popular(dataset, 1)            # 仅 #1 最热门商品
+    else:
+        pops = topk_popular(dataset, k)            # top-K 求平均(默认)
+
     item2img = None
     if source == "reextract":
         import clip_extract as CE
         item2img = CE.load_item2img()
-    vecs = []
-    for item_str, _cnt in pops:
-        vecs.append(_feature_for(dataset, item_str, source, flag, item2img))
+    vecs = [_feature_for(dataset, item_str, source, flag, item2img) for item_str, _ in pops]
     M = np.stack(vecs, axis=0).astype("float32")
-    centroid = M.mean(axis=0)
+    centroid = M.mean(axis=0)                       # 单个商品时 = 该商品特征本身
     if flag:
         centroid = centroid / (np.linalg.norm(centroid) + 1e-8)
     np.save(C.CENTROID_PATH, centroid.astype("float32"))
-    meta = {"source": source, "normalize": bool(flag), "k": k,
-            "top_items": [{"item": i, "count": c} for i, c in pops],
+    eff_mode = "target_item" if target_item is not None else mode
+    meta = {"source": source, "normalize": bool(flag), "mode": eff_mode,
+            "k": (1 if eff_mode != "mean" else k),
+            "items": [{"item": i, "count": c} for i, c in pops],
             "centroid_l2": float(np.linalg.norm(centroid))}
     json.dump(meta, open(C.CENTROID_PATH.replace(".npy", "_meta.json"), "w"), indent=2)
-    print("[build_centroid] saved", C.CENTROID_PATH,
-          "| source=%s normalize=%s k=%d" % (source, flag, k))
-    print("[build_centroid] top items:", [i for i, _ in pops])
+    print("[build_centroid] saved %s | mode=%s source=%s normalize=%s | items=%s"
+          % (C.CENTROID_PATH, eff_mode, source, flag, [i for i, _ in pops]))
     return centroid
 
 
 if __name__ == "__main__":
+    # 用法: python attack/build_centroid.py [shipped|reextract] [mean|top1]
     src = sys.argv[1] if len(sys.argv) > 1 else "shipped"
+    mode = sys.argv[2] if len(sys.argv) > 2 else None
     ctx = common.load_context(need_model=False)
-    build_centroid(ctx.dataset, source=src)
+    build_centroid(ctx.dataset, source=src, mode=mode)
