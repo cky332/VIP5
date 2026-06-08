@@ -7,6 +7,10 @@ Usage (from repo root):
     python attack/run_all.py pointwise listwise     # only evals (after pgd)
 
 Stages: ablation | clip | centroid | pgd | pointwise | listwise
+        xt-centroid | xt-attack | xt-eval    (X-Transfer: black-box transferable attack)
+
+X-Transfer usage (after `clip` has resolved CLIP_NORM):
+    python attack/run_all.py xt-centroid xt-attack xt-eval
 """
 import os
 import sys
@@ -15,7 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common
 import config as C
 
-STAGES = ["ablation", "clip", "centroid", "pgd", "pointwise", "listwise"]
+STAGES = ["ablation", "clip", "centroid", "pgd", "pointwise", "listwise",
+          "xt-centroid", "xt-attack", "xt-eval"]
 
 
 def preflight():
@@ -56,6 +61,18 @@ def main(stages):
         elif st == "listwise":
             import eval_listwise as EL
             EL.main()
+        elif st == "xt-centroid":
+            import xtransfer_centroid as XC
+            ctx = common.load_context(need_model=False)
+            XC.build_all_centroids(ctx.dataset)
+        elif st == "xt-attack":
+            import xtransfer_attack as XA
+            import pgd_attack as P
+            ctx = common.load_context(need_model=False)
+            XA.attack_targets_xt(ctx.dataset, P.test_positive_items(ctx.dataset))
+        elif st == "xt-eval":
+            import eval_xtransfer as EX
+            EX.main()
         else:
             print("[run_all] unknown stage:", st)
 
