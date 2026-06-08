@@ -57,7 +57,7 @@ EXTRACTION_CHECK   = "attack/out/extraction_check.json"
 # unaffected; all XT artifacts live under attack/out/xtransfer/.
 # ===========================================================================
 XT_TARGETED       = True              # True: rank-up toward popular centroid; False: degrade (ablation)
-XT_USE_OPEN_CLIP  = True              # True: diverse open_clip pool; False: OpenAI-clip-only fallback
+XT_USE_OPEN_CLIP  = False             # False: OpenAI-clip-only pool (no new deps, DEFAULT); True: diverse open_clip pool (needs --no-deps install)
 XT_INCLUDE_VICTIM = False             # True: also add OpenAI ViT-B/32 to the pool (white-box upper bound)
 
 XT_EPS            = 16.0 / 255.0      # L-inf budget on cover pixels
