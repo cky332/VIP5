@@ -49,3 +49,37 @@ python attack/run_all.py listwise               # 辅评测(原生 B-8 生成式
   先看 ablation 的 `alpha=1.00`:若它都几乎不抬 P(yes),则模型对图像通道鲁棒,像素攻击也超不过——
   这是重要的(负)结论。
 - 各脚本也可单独运行,如 `python attack/clip_extract.py`、`python attack/pgd_attack.py`。
+
+## 进阶:X-Transfer 黑盒·超可迁移攻击(对标 arXiv 2505.05528)
+
+上面的 PGD 攻击是**白盒·单 CLIP·单品**:前提是能精确复刻平台那版 CLIP(ViT-B/32)。
+X-Transfer 变体去掉这个前提——在一个**替身 CLIP 集成**上构造扰动(每步用 UCB 老虎机挑 k 个替身,
+即 surrogate scaling),使「只改图」的扰动能**迁移到未知/黑盒的 CLIP**。目标仍是「热门质心模仿」
+(把替身嵌入推向各自的热门质心),因此能**抬高候选排名**;受害者 ViT-B/32 被**留出**,仅在最后用于
+重提取被污染特征以证明迁移。默认 `XT_DPRIME_MODE="single"`(单品定向,最贴合「抬高我的某个候选」)。
+
+> 威胁模型:攻击者改封面 → 平台用某个(未知的)公开 CLIP 重提特征 → VIP5 消费。攻击只需白盒一批
+> **替身** CLIP,**既不需要 VIP5 梯度,也不需要平台那版 CLIP**。
+
+前置:在 `clip` 阶段解析出 `CLIP_NORM` 之后再跑。替身池默认用 `open_clip`(`pip install open_clip_torch`,
+首次会从 HF 下权重,可 `export HF_ENDPOINT=https://hf-mirror.com`);若不便装,设
+`attack/config.py` 里 `XT_USE_OPEN_CLIP=False` 退回「仅 OpenAI clip」池(免新依赖)。
+
+```bash
+python attack/run_all.py clip                      # 解析 CLIP_NORM(只需一次)
+python attack/run_all.py xt-centroid xt-attack xt-eval
+cat attack/out/xtransfer/results/xtransfer_pointwise.json
+```
+
+- `xt-centroid`:为**每个替身**在其自身空间建热门质心 → `attack/out/xtransfer/centroids/`;
+  同时建一个**受害者** ViT-B/32 质心(仅作迁移探针的健全性指标)。
+- `xt-attack`:逐目标构造黑盒 δ,用**受害者**重提取 clean/poisoned 特征(512 维,不做 L2 归一化,
+  与出厂特征一致)→ `attack/out/xtransfer/{poisoned,clean}_features/<split>/`;
+  产物 `xt_attack_summary.json` 含 **transfer_probe_ok**(被污染特征是否比 clean 更贴近受害者质心——
+  这是 VIP5 打分前的 GO/NO-GO 闸门)。
+- `xt-eval`:复用 `run_pointwise/scorer`,输出 clean vs `xtransfer` 的名次/HR@10/NDCG@10/P(yes)。
+
+对照实验(同一目标集/用户/负样本):`XT_INCLUDE_VICTIM=True` 得白盒上界;已有 `pgd`(单 CLIP 白盒)
+与 `ablation`(α=1 特征上界)作参照。关键超参在 `attack/config.py` 的 `XT_*` 段
+(`XT_EPS/XT_STEPS/XT_K_SELECT/XT_SEARCH_SPACE_*` 等)。**只适用于 direct 推荐(B 类模板)**,
+与上文同一适用边界。
