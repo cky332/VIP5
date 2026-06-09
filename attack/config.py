@@ -64,6 +64,7 @@ XT_EPS            = 16.0 / 255.0      # L-inf budget on cover pixels
 XT_ALPHA          = 16.0 / 255.0 / 5.0  # sign-gradient step (eps/5, transfer-attack style)
 XT_STEPS          = 200               # optimization steps j
 XT_K_SELECT       = 4                 # surrogates selected per step (UCB)
+XT_GPU_RESIDENT   = True              # keep all surrogates on GPU (fast); False = per-step CPU<->GPU swap (low VRAM)
 XT_BATCH          = 8                 # minibatch of D' covers per step (universal mode)
 XT_UCB_C          = 1.0               # UCB exploration constant
 XT_MOMENTUM       = 0.9               # reward EMA factor m
