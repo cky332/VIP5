@@ -135,21 +135,28 @@ def train_generator(dataset, device=None):
                 z0 = _norm(E0.encode(tgt))                         # conditioning embedding
             delta = G(z0)                                          # (B,3,224,224) per-target
             adv = torch.clamp(src + delta, 0, 1)
+            # memory-bounded: accumulate grad wrt `adv` ONE surrogate at a time (each
+            # surrogate's forward graph is freed by autograd.grad), then a single
+            # backward adv->delta->G. Avoids holding all k CLIP graphs at once (OOM).
+            adv_d = adv.detach().requires_grad_(True)
             sel = rng.choice(len(space), size=min(C.AA_K, len(space)), replace=False)
-            loss = 0.0
+            adv_grad = torch.zeros_like(adv_d)
+            step_loss = 0.0
             for i in sel:
                 s = space[int(i)]
                 with torch.no_grad():
                     zt = s.encode(tgt)
-                za = s.encode(adv)
-                loss = loss + (1.0 - F.cosine_similarity(za, zt)).mean()
-            loss = loss / len(sel)
+                za = s.encode(adv_d)
+                Li = (1.0 - F.cosine_similarity(za, zt)).mean() / len(sel)
+                gi, = torch.autograd.grad(Li, adv_d)              # frees this surrogate's graph
+                adv_grad = adv_grad + gi
+                step_loss += float(Li.detach())
             opt.zero_grad()
-            loss.backward()
+            adv.backward(adv_grad)                                 # adv -> delta -> G (once)
             opt.step()
-            run += float(loss.detach())
+            run += step_loss
             if b % 50 == 0:
-                print("[aa] ep %d step %d/%d loss %.4f" % (ep + 1, b, spe, float(loss.detach())))
+                print("[aa] ep %d step %d/%d loss %.4f" % (ep + 1, b, spe, step_loss))
         print("[aa] epoch %d done | mean loss %.4f" % (ep + 1, run / max(1, spe)))
 
     torch.save({"state_dict": G.state_dict(), "in_dim": d0,
