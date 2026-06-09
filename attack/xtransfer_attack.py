@@ -86,8 +86,9 @@ def xtransfer_delta(X, space, centroids, eps=C.XT_EPS, alpha=C.XT_ALPHA,
         delta.requires_grad_(True)
         for i in idx:
             bandit.update(i, per_loss[i])
-        for i in idx:
-            space[i].to_cpu()
+        if not C.XT_GPU_RESIDENT:                       # else keep models GPU-resident across steps/targets
+            for i in idx:
+                space[i].to_cpu()
         trace["loss"].append(float(L.detach()))
         trace["cos"].append(float(np.mean(per_cos)))
         if log_every and (step + 1) % log_every == 0:
