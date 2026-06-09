@@ -143,8 +143,31 @@ class Surrogate:
 
 
 def build_search_space(device=None):
-    """Instantiate (lazy) Surrogate objects from config.xt_search_space()."""
-    return [Surrogate(e, device=device) for e in C.xt_search_space()]
+    """Instantiate (lazy) Surrogate objects from config.xt_search_space().
+
+    open_clip entries whose (model, pretrained) tag is absent in the INSTALLED
+    open_clip are skipped with a warning (tag availability varies by version), so a
+    stale tag never crashes the whole run. openai_clip entries are kept as-is."""
+    entries = C.xt_search_space()
+    if any(e.get("backend") == "open_clip" for e in entries):
+        try:
+            import open_clip
+            avail = set(open_clip.list_pretrained())     # [(model_name, tag), ...]
+            kept = []
+            for e in entries:
+                if e.get("backend") == "open_clip" and \
+                        (e["name"], e.get("pretrained")) not in avail:
+                    print("[surrogates][skip] %s/%s not in installed open_clip; skipping"
+                          % (e["name"], e.get("pretrained")))
+                    continue
+                kept.append(e)
+            entries = kept
+        except ImportError:
+            pass   # Surrogate.load() raises the friendly install message later
+    if not entries:
+        raise RuntimeError("no usable surrogates after filtering; check XT_SEARCH_SPACE "
+                           "and the installed open_clip version")
+    return [Surrogate(e, device=device) for e in entries]
 
 
 class UCB:

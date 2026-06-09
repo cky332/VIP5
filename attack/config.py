@@ -77,18 +77,19 @@ XT_TARGET_ITEM    = None              # specific item id (str/int); overrides XT
 
 # Black-box surrogate search space (MUST exclude the victim OpenAI ViT-B/32).
 # entry = {"backend": "open_clip"|"openai_clip", "name": <model>, "pretrained": <tag|None>}
-XT_SEARCH_SPACE_OPENCLIP = [   # timm-free (ViT/RN only) so `pip install --no-deps` open_clip works
-    {"backend": "open_clip", "name": "ViT-B-16",           "pretrained": "laion2b_s34b_b88k"},
-    {"backend": "open_clip", "name": "ViT-L-14",           "pretrained": "laion2b_s32b_b82k"},
-    {"backend": "open_clip", "name": "ViT-B-32",           "pretrained": "laion2b_s34b_b79k"},
-    {"backend": "open_clip", "name": "ViT-B-16",           "pretrained": "datacomp_xl_s13b_b90k"},
-    {"backend": "open_clip", "name": "ViT-L-14",           "pretrained": "datacomp_xl_s13b_b90k"},
-    {"backend": "open_clip", "name": "ViT-B-16-quickgelu", "pretrained": "metaclip_400m"},
-    {"backend": "open_clip", "name": "ViT-B-32-quickgelu", "pretrained": "metaclip_400m"},
-    {"backend": "open_clip", "name": "RN50",               "pretrained": "yfcc15m"},
-    # need timm / more GPU mem; enable if available:
-    # {"backend": "open_clip", "name": "convnext_base_w",  "pretrained": "laion2b_s13b_b82k"},
-    # {"backend": "open_clip", "name": "ViT-H-14",         "pretrained": "laion2b_s32b_b79k"},
+XT_SEARCH_SPACE_OPENCLIP = [   # timm-free; tags valid in open_clip 2.20 (unknown tags auto-skipped)
+    {"backend": "open_clip", "name": "ViT-B-16", "pretrained": "laion2b_s34b_b88k"},
+    {"backend": "open_clip", "name": "ViT-L-14", "pretrained": "laion2b_s32b_b82k"},
+    {"backend": "open_clip", "name": "ViT-B-32", "pretrained": "laion2b_s34b_b79k"},
+    {"backend": "open_clip", "name": "ViT-B-16", "pretrained": "datacomp_l_s1b_b8k"},
+    {"backend": "open_clip", "name": "ViT-B-16", "pretrained": "commonpool_l_clip_s1b_b8k"},
+    {"backend": "open_clip", "name": "ViT-B-16", "pretrained": "laion400m_e32"},
+    {"backend": "open_clip", "name": "ViT-B-32", "pretrained": "laion400m_e32"},
+    {"backend": "open_clip", "name": "RN50",     "pretrained": "yfcc15m"},
+    # newer/heavier (need open_clip>=2.24 or timm); auto-skipped if unavailable:
+    # {"backend": "open_clip", "name": "ViT-B-16", "pretrained": "datacomp_xl_s13b_b90k"},
+    # {"backend": "open_clip", "name": "ViT-B-16-quickgelu", "pretrained": "metaclip_400m"},
+    # {"backend": "open_clip", "name": "convnext_base_w", "pretrained": "laion2b_s13b_b82k"},
 ]
 XT_SEARCH_SPACE_OPENAI = [            # no new deps; cross-arch but single (WIT) pretrain distribution
     {"backend": "openai_clip", "name": "ViT-B/16",       "pretrained": None},
