@@ -75,6 +75,12 @@ XT_DPRIME_SIZE    = 64                # universal mode only: #covers sampled int
 XT_CENTROID_MODE  = "top1"            # "top1": single MOST-popular item's image (default) | "mean": top-K avg
 XT_TARGET_ITEM    = None              # specific item id (str/int); overrides XT_CENTROID_MODE when set
 
+# M-Attack-style local matching (arXiv 2503.10635): random-resized-crop the adversarial
+# cover each step before matching -> less overfit to surrogates, better black-box transfer.
+XT_CROP        = False                # enable random-crop local matching
+XT_CROP_SCALE  = (0.5, 1.0)          # crop area fraction range (M-Attack uses [0.5,1.0])
+XT_CROP_RATIO  = (0.75, 1.3333)      # crop aspect-ratio range
+
 # Black-box surrogate search space (MUST exclude the victim OpenAI ViT-B/32).
 # entry = {"backend": "open_clip"|"openai_clip", "name": <model>, "pretrained": <tag|None>}
 XT_SEARCH_SPACE_OPENCLIP = [   # timm-free; tags valid in open_clip 2.20 (unknown tags auto-skipped)

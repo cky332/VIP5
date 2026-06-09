@@ -37,6 +37,31 @@ def _cos_np(a, b):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8))
 
 
+def _random_resized_crop(x, scale, ratio, out=None):
+    """M-Attack-style local view: a random-resized-crop, differentiable wrt x.
+    x: (B,3,H,W) in [0,1] -> (B,3,out,out). One crop box per call, shared across the
+    batch (matches M-Attack's one-crop-per-iteration). Crop (slice) + resize
+    (interpolate) are both differentiable, so the gradient still flows to delta."""
+    import math
+    import random as _r
+    _, _, H, W = x.shape
+    out = out or H
+    area = float(H * W)
+    logr = (math.log(ratio[0]), math.log(ratio[1]))
+    for _ in range(10):
+        ta = area * _r.uniform(scale[0], scale[1])
+        ar = math.exp(_r.uniform(*logr))
+        w = int(round(math.sqrt(ta * ar)))
+        h = int(round(math.sqrt(ta / ar)))
+        if 0 < w <= W and 0 < h <= H:
+            i = _r.randint(0, H - h)
+            j = _r.randint(0, W - w)
+            crop = x[:, :, i:i + h, j:j + w]
+            return F.interpolate(crop, size=(out, out), mode="bicubic",
+                                 align_corners=False).clamp(0, 1)
+    return F.interpolate(x, size=(out, out), mode="bicubic", align_corners=False).clamp(0, 1)
+
+
 def xtransfer_delta(X, space, centroids, eps=C.XT_EPS, alpha=C.XT_ALPHA,
                     steps=C.XT_STEPS, k=C.XT_K_SELECT, momentum=C.XT_MOMENTUM,
                     c=C.XT_UCB_C, targeted=C.XT_TARGETED, batch=C.XT_BATCH,
@@ -64,6 +89,8 @@ def xtransfer_delta(X, space, centroids, eps=C.XT_EPS, alpha=C.XT_ALPHA,
         else:
             xb = X
         x = torch.clamp(xb + delta, 0, 1)               # delta broadcasts over the batch
+        if C.XT_CROP:                                   # M-Attack: local view (crop) -> global target
+            x = _random_resized_crop(x, C.XT_CROP_SCALE, C.XT_CROP_RATIO, out=x.shape[-1])
         total, per_loss, per_cos = 0.0, {}, []
         for i in idx:
             s = space[i].to_gpu()
@@ -206,7 +233,7 @@ def attack_targets_xt(dataset, target_item_strs, device=None, steps=None):
             print(msg)
 
     summary = {"n_attacked": len(rows), "n_skipped_no_image": skipped,
-               "mode": C.XT_DPRIME_MODE, "targeted": C.XT_TARGETED,
+               "mode": C.XT_DPRIME_MODE, "targeted": C.XT_TARGETED, "crop": bool(C.XT_CROP),
                "n_surrogates": len(space), "k": C.XT_K_SELECT,
                "steps": (C.XT_STEPS if steps is None else steps),
                "max_linf": float(np.max([r["linf"] for r in rows])) if rows else None}

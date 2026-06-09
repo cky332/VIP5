@@ -86,12 +86,16 @@ def main():
     ap.add_argument("--combos", default=",".join(COMBOS), help="comma list from: " + ",".join(COMBOS))
     ap.add_argument("--pool", choices=["openai", "open_clip"], default=None,
                     help="surrogate pool (default: whatever XT_USE_OPEN_CLIP is in config)")
+    ap.add_argument("--crop", action="store_true",
+                    help="M-Attack random-crop local matching (sets XT_CROP=True)")
     args = ap.parse_args()
     names = [c.strip() for c in args.combos.split(",") if c.strip() in COMBOS]
     if not names:
         raise SystemExit("no valid combos in --combos; choose from " + ",".join(COMBOS))
     if args.pool is not None:
         C.XT_USE_OPEN_CLIP = (args.pool == "open_clip")
+    if args.crop:
+        C.XT_CROP = True
 
     C.N_TEST_USERS = args.users
     ctx = common.load_context(need_model=True)
@@ -104,7 +108,8 @@ def main():
     # ---------------- combined table ----------------
     pool = "open_clip" if C.XT_USE_OPEN_CLIP else "openai"
     print("\n" + "#" * 74)
-    print("X-TRANSFER COMPARISON  (n=%d users, %d steps, pool=%s)" % (args.users, args.steps, pool))
+    print("X-TRANSFER COMPARISON  (n=%d users, %d steps, pool=%s, crop=%s)"
+          % (args.users, args.steps, pool, C.XT_CROP))
     hdr = "%-12s %6s %8s %8s %8s %8s   %s" % (
         "combo", "rank", "P(yes)", "HR@10", "NDCG@10", "vcosD", "probe")
     print("#" * 74)
