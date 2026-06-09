@@ -20,7 +20,8 @@ import common
 import config as C
 
 STAGES = ["ablation", "clip", "centroid", "pgd", "pointwise", "listwise",
-          "xt-centroid", "xt-attack", "xt-eval"]
+          "xt-centroid", "xt-attack", "xt-eval",
+          "aa-train", "aa-attack", "aa-eval"]
 
 
 def preflight():
@@ -73,6 +74,18 @@ def main(stages):
         elif st == "xt-eval":
             import eval_xtransfer as EX
             EX.main()
+        elif st == "aa-train":
+            import anyattack_gen as AA
+            ctx = common.load_context(need_model=False)
+            AA.train_generator(ctx.dataset)
+        elif st == "aa-attack":
+            import anyattack_gen as AA
+            import pgd_attack as P
+            ctx = common.load_context(need_model=False)
+            AA.attack_targets_aa(ctx.dataset, P.test_positive_items(ctx.dataset))
+        elif st == "aa-eval":
+            import anyattack_gen as AA
+            AA.eval_aa()
         else:
             print("[run_all] unknown stage:", st)
 

@@ -126,3 +126,28 @@ XT_PERT_IMG_DIR    = "attack/out/xtransfer/perturbed_images"
 XT_RESULTS_DIR     = "attack/out/xtransfer/results"
 XT_RESULTS_JSON    = "attack/out/xtransfer/results/xtransfer_pointwise.json"
 XT_VICTIM_CENTROID = "attack/out/xtransfer/centroids/__victim__.npy"
+
+
+# ===========================================================================
+# AnyAttack (arXiv 2410.05346) — self-contained lightweight port. A target-
+# conditioned noise generator G(z_target)->delta, trained self-supervised on the
+# toys catalog against the SAME surrogate ensemble (XT_SEARCH_SPACE), victim held
+# out. Reuses XT_* pool / EPS. Tests whether an AMORTIZED generator transfers
+# better than per-image PGD (full LAION-400M pretraining is out of scope).
+# ===========================================================================
+AA_EPS         = XT_EPS               # L-inf budget on cover pixels (reuse)
+AA_EPOCHS      = 5                    # passes over the catalog covers
+AA_BATCH       = 8                    # images per step (targets; sources = shuffled batch)
+AA_K           = 4                    # surrogates used per step (random subset; memory/diversity)
+AA_LR          = 1e-4                 # Adam lr for the generator
+AA_MAX_ITEMS   = None                 # cap #catalog covers used for training (None = all resolvable)
+AA_GEN_CH      = 512                  # generator base channels
+AA_SEED        = SEED
+
+AA_OUT_DIR        = "attack/out/anyattack"
+AA_GEN_PATH       = "attack/out/anyattack/generator.pt"
+AA_POIS_FEAT_DIR  = "attack/out/anyattack/poisoned_features/{split}".format(split=SPLIT)
+AA_CLEAN_FEAT_DIR = "attack/out/anyattack/clean_features/{split}".format(split=SPLIT)
+AA_PERT_IMG_DIR   = "attack/out/anyattack/perturbed_images"
+AA_RESULTS_DIR    = "attack/out/anyattack/results"
+AA_RESULTS_JSON   = "attack/out/anyattack/results/anyattack_pointwise.json"
