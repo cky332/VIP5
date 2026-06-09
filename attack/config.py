@@ -137,7 +137,7 @@ XT_VICTIM_CENTROID = "attack/out/xtransfer/centroids/__victim__.npy"
 # ===========================================================================
 AA_EPS         = XT_EPS               # L-inf budget on cover pixels (reuse)
 AA_EPOCHS      = 5                    # passes over the catalog covers
-AA_BATCH       = 8                    # images per step (targets; sources = shuffled batch)
+AA_BATCH       = 4                    # images per step (targets; sources = shuffled batch); lower if OOM
 AA_K           = 4                    # surrogates used per step (random subset; memory/diversity)
 AA_LR          = 1e-4                 # Adam lr for the generator
 AA_MAX_ITEMS   = None                 # cap #catalog covers used for training (None = all resolvable)
