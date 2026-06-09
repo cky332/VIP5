@@ -105,7 +105,7 @@ def _save_png(x_chw, path):
 
 
 def attack_item_xt(asin, image_path, space, centroids, normalize,
-                   victim_centroid=None, shared_delta=None, device=None):
+                   victim_centroid=None, shared_delta=None, device=None, steps=None):
     """Craft (or apply) delta for one target, then materialize VICTIM-space features."""
     device = device or C.DEVICE
     from PIL import Image
@@ -113,7 +113,8 @@ def attack_item_xt(asin, image_path, space, centroids, normalize,
     if shared_delta is not None:                                    # universal: apply precomputed
         delta = shared_delta.to(device)
     else:                                                           # single-target: optimize here
-        delta, _trace = xtransfer_delta(x0.unsqueeze(0), space, centroids, device=device)
+        delta, _trace = xtransfer_delta(x0.unsqueeze(0), space, centroids,
+                                        steps=(C.XT_STEPS if steps is None else steps), device=device)
         delta = delta.to(device)
     x_adv = torch.clamp(x0 + delta, 0, 1)
 
@@ -153,7 +154,7 @@ def _sample_catalog_covers(dataset, item2img, device, n=None):
     return torch.stack(covers, 0).to(device)
 
 
-def attack_targets_xt(dataset, target_item_strs, device=None):
+def attack_targets_xt(dataset, target_item_strs, device=None, steps=None):
     """Per target: craft a black-box transferable delta and write victim-space feats."""
     FXT.ensure_xt_dirs()
     device = device or C.DEVICE
@@ -175,7 +176,8 @@ def attack_targets_xt(dataset, target_item_strs, device=None):
     shared_delta = None
     if C.XT_DPRIME_MODE == "universal":
         Dp = _sample_catalog_covers(dataset, item2img, device)
-        shared_delta, trace = xtransfer_delta(Dp, space, centroids, device=device)
+        shared_delta, trace = xtransfer_delta(Dp, space, centroids,
+                                              steps=(C.XT_STEPS if steps is None else steps), device=device)
         np.save(os.path.join(C.XT_DELTA_DIR, "uap.npy"),
                 shared_delta.numpy().astype("float32"))
         json.dump({"loss_tail": trace["loss"][-5:], "cos_tail": trace["cos"][-5:],
@@ -195,7 +197,7 @@ def attack_targets_xt(dataset, target_item_strs, device=None):
             continue
         row = attack_item_xt(asin, ip, space, centroids, normalize,
                              victim_centroid=victim_centroid, shared_delta=shared_delta,
-                             device=device)
+                             device=device, steps=steps)
         rows.append(row)
         if len(rows) % 10 == 0:
             msg = "[xt] %d done | last linf %.4f" % (len(rows), row["linf"])
@@ -205,7 +207,8 @@ def attack_targets_xt(dataset, target_item_strs, device=None):
 
     summary = {"n_attacked": len(rows), "n_skipped_no_image": skipped,
                "mode": C.XT_DPRIME_MODE, "targeted": C.XT_TARGETED,
-               "n_surrogates": len(space), "k": C.XT_K_SELECT, "steps": C.XT_STEPS,
+               "n_surrogates": len(space), "k": C.XT_K_SELECT,
+               "steps": (C.XT_STEPS if steps is None else steps),
                "max_linf": float(np.max([r["linf"] for r in rows])) if rows else None}
     if rows and "victim_cos_after" in rows[0]:
         summary["mean_victim_cos_before"] = float(np.mean([r["victim_cos_before"] for r in rows]))
