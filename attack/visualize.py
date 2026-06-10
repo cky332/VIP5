@@ -43,6 +43,7 @@ SRC_DIRS = {
     "pgd": C.PERTURBED_IMG_DIR,
     "xt": C.XT_PERT_IMG_DIR,
     "aa": C.AA_PERT_IMG_DIR,
+    "style": C.STYLE_PERT_IMG_DIR,
 }
 
 

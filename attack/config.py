@@ -151,3 +151,25 @@ AA_CLEAN_FEAT_DIR = "attack/out/anyattack/clean_features/{split}".format(split=S
 AA_PERT_IMG_DIR   = "attack/out/anyattack/perturbed_images"
 AA_RESULTS_DIR    = "attack/out/anyattack/results"
 AA_RESULTS_JSON   = "attack/out/anyattack/results/anyattack_pointwise.json"
+
+
+# ===========================================================================
+# SPAF-style attack (CIKM'24: "Attacking VARS with Transferable and Imperceptible
+# Adversarial Styles"). Content-preserving *style* perturbation: per-channel affine
+# (gain/bias) + a smooth low-res color/contrast field (bilinearly upsampled) -- NOT
+# an L-inf pixel budget and NOT high-freq noise. Optimized WHITE-BOX through the
+# victim's real CLIP toward the SAME popular centroid as pgd_attack.py, so we can
+# measure how much the *style axis* moves VIP5 vs full-freedom pixel PGD. Unbounded
+# in pixel L-inf (like SPAF); the low-dim/smooth parameterization keeps it "style".
+# ===========================================================================
+STYLE_GRID      = 7          # low-res color field resolution (k x k), bilinearly upsampled to 224
+STYLE_STEPS     = 200        # Adam steps (match PGD_STEPS for a fair comparison)
+STYLE_LR        = 0.02       # Adam lr on the style params
+STYLE_REG       = 1e-3       # L2 reg pulling params toward identity (plausible/smooth restyle)
+STYLE_LOSS      = "cosine"   # match pgd target objective ("cosine" or "l2")
+
+STYLE_OUT_DIR        = "attack/out/style"
+STYLE_POIS_FEAT_DIR  = "attack/out/style/poisoned_features/{split}".format(split=SPLIT)
+STYLE_PERT_IMG_DIR   = "attack/out/style/perturbed_images"
+STYLE_RESULTS_DIR    = "attack/out/style/results"
+STYLE_RESULTS_JSON   = "attack/out/style/results/style_pointwise.json"
