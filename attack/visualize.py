@@ -1,18 +1,23 @@
 """(viz) Visualize the adversarial perturbation as a labeled montage:
 
     [ clean | adversarial | perturbation x AMP ]   with a header (column names)
-    and a per-row label: "item <id> (<asin>)  Linf=../255  mean|d|=..".
+    and a per-row label: "item <id> (<asin>)  max|d|=../255  mean|d|=..".
 
-Reuses the perturbed PNGs from pgd_attack (attack/out/perturbed_images/<asin>.png)
-and reconstructs the clean 224 image from the original via the SAME preprocess.
+Reconstructs the clean 224 image from the original cover via the SAME preprocess and
+diffs it against the saved adversarial PNG. Works for any of the three attacks
+(they all save perturbed PNGs in the same 224x224 [0,1] space):
+
+    pgd : attack/out/perturbed_images/            (single-CLIP white-box PGD)
+    xt  : attack/out/xtransfer/perturbed_images/  (X-Transfer black-box transfer)
+    aa  : attack/out/anyattack/perturbed_images/  (AnyAttack generator)
+
 PIL + numpy only (no matplotlib).
 
-Run:
-    python attack/visualize.py            # 8 samples, diff x10
-    python attack/visualize.py 12 20      # 12 samples, diff x20
-Outputs in attack/out/perturbed_images/:
-    compare_<asin>.png   (one labeled item)
-    grid_compare.png     (all samples stacked, with header)
+Run (from repo root):
+    python attack/visualize.py                 # pgd, 8 samples, diff x10  (back-compat)
+    python attack/visualize.py 12 20 xt        # X-Transfer, 12 samples, diff x20
+    python attack/visualize.py 6 10 aa         # AnyAttack, 6 samples, diff x10
+Outputs (next to the perturbed images): compare_<asin>.png + grid_compare.png
 """
 import os
 import sys
@@ -32,6 +37,13 @@ GAP = 8                        # gap between panels
 W = CW * 3 + GAP * 2           # full row width = 688
 BAND = 22                      # label band height
 COL_CX = [CW // 2, CW + GAP + CW // 2, 2 * (CW + GAP) + CW // 2]   # column centers
+
+# attack selector -> directory holding <asin>.png perturbed covers
+SRC_DIRS = {
+    "pgd": C.PERTURBED_IMG_DIR,
+    "xt": C.XT_PERT_IMG_DIR,
+    "aa": C.AA_PERT_IMG_DIR,
+}
 
 
 def _font(size=13):
@@ -70,8 +82,8 @@ def _band(text_left=None, centered=None, h=BAND):
     return np.asarray(band)
 
 
-def make_row(asin, item2img, item2id, amp):
-    adv_path = os.path.join(C.PERTURBED_IMG_DIR, asin + ".png")
+def make_row(asin, item2img, item2id, amp, src_dir):
+    adv_path = os.path.join(src_dir, asin + ".png")
     if not os.path.isfile(adv_path):
         return None
     ip = CE.resolve_image_path(asin, item2img)
@@ -94,16 +106,19 @@ def make_row(asin, item2img, item2id, amp):
     return block, stats
 
 
-def main(n=8, amp=10):
+def main(n=8, amp=10, which="pgd"):
+    if which not in SRC_DIRS:
+        raise SystemExit("unknown attack '%s'; choose from %s" % (which, list(SRC_DIRS)))
+    src_dir = SRC_DIRS[which]
     item2img = CE.load_item2img()
     item2id = json.load(open(C.DATAMAPS))["item2id"]
-    paths = sorted(p for p in glob.glob(os.path.join(C.PERTURBED_IMG_DIR, "*.png"))
+    paths = sorted(p for p in glob.glob(os.path.join(src_dir, "*.png"))
                    if not os.path.basename(p).startswith(("compare_", "grid")))
     asins = [os.path.basename(p)[:-4] for p in paths][:n]
 
     blocks, all_stats = [], []
     for a in asins:
-        r = make_row(a, item2img, item2id, amp)
+        r = make_row(a, item2img, item2id, amp, src_dir)
         if r is None:
             continue
         block, stats = r
@@ -111,11 +126,12 @@ def main(n=8, amp=10):
         print(stats)
         Image.fromarray(np.concatenate([_band(centered=["clean", "adversarial", "diff x%d" % amp]),
                                          block], axis=0)).save(
-            os.path.join(C.PERTURBED_IMG_DIR, "compare_%s.png" % a))
+            os.path.join(src_dir, "compare_%s.png" % a))
         blocks.append(block)
 
     if not blocks:
-        print("[viz] no perturbed images found in", C.PERTURBED_IMG_DIR, "- run pgd first.")
+        print("[viz] no perturbed images found in", src_dir,
+              "- run the '%s' attack first." % which)
         return
     header = _band(centered=["clean", "adversarial", "diff x%d" % amp])
     row_gap = np.ones((10, W, 3), dtype="uint8") * 255
@@ -123,9 +139,9 @@ def main(n=8, amp=10):
     for b in blocks:
         parts += [b, row_gap]
     grid = np.concatenate(parts[:-1], axis=0)
-    grid_path = os.path.join(C.PERTURBED_IMG_DIR, "grid_compare.png")
+    grid_path = os.path.join(src_dir, "grid_compare.png")
     Image.fromarray(grid).save(grid_path)
-    print("\n[viz] %d labeled montages + grid -> %s" % (len(blocks), grid_path))
+    print("\n[viz] attack=%s | %d labeled montages + grid -> %s" % (which, len(blocks), grid_path))
     print("[viz] columns: clean | adversarial | perturbation x%d (mid-gray = no change)" % amp)
     print("[viz] mean Linf = %.2f/255 (budget 16/255), mean |delta| = %.2f/255 per channel"
           % (np.mean([s["Linf_/255"] for s in all_stats]),
@@ -135,4 +151,5 @@ def main(n=8, amp=10):
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 8
     amp = int(sys.argv[2]) if len(sys.argv) > 2 else 10
-    main(n, amp)
+    which = sys.argv[3] if len(sys.argv) > 3 else "pgd"
+    main(n, amp, which)
