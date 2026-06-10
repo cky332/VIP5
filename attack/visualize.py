@@ -107,9 +107,18 @@ def make_row(asin, item2img, item2id, amp, src_dir):
 
 
 def main(n=8, amp=10, which="pgd"):
-    if which not in SRC_DIRS:
-        raise SystemExit("unknown attack '%s'; choose from %s" % (which, list(SRC_DIRS)))
-    src_dir = SRC_DIRS[which]
+    if which in SRC_DIRS:
+        src_dir = SRC_DIRS[which]
+    else:
+        # also accept a typographic variant name (text_attack.py writes
+        # attack/out/text/<variant>/images/<asin>.png), e.g. inject_bgadapt
+        cand = os.path.join(C.OUT_DIR, "text", which, "images")
+        if os.path.isdir(cand):
+            src_dir = cand
+        else:
+            raise SystemExit("unknown attack '%s'; choose from %s or a text variant "
+                             "with images under attack/out/text/<variant>/images/"
+                             % (which, list(SRC_DIRS)))
     item2img = CE.load_item2img()
     item2id = json.load(open(C.DATAMAPS))["item2id"]
     paths = sorted(p for p in glob.glob(os.path.join(src_dir, "*.png"))

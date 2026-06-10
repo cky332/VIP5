@@ -34,7 +34,7 @@ COLS = ["clean"] + list(TA.VARIANTS.keys())          # 4 columns
 NCOL = len(COLS)
 W = CW * NCOL + GAP * (NCOL - 1)
 COL_CX = [i * (CW + GAP) + CW // 2 for i in range(NCOL)]
-COL_LABELS = ["clean", "rank_first_en", "stealth a96", "stealth_low a64"]
+COL_LABELS = COLS          # auto-derive (clean + every variant, incl. inject_bgadapt)
 
 
 def _font(size=13):
