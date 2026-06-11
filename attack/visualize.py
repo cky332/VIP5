@@ -46,6 +46,7 @@ SRC_DIRS = {
     "style": C.STYLE_PERT_IMG_DIR,
     "auv_pref": C.AUV_PREF_IMG_DIR,
     "auv_pop": C.AUV_POP_IMG_DIR,
+    "auv_diff": C.AUV_DIFF_PERT_IMG_DIR,
 }
 
 

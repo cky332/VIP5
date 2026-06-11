@@ -205,3 +205,33 @@ AUV_PREF_IMG_DIR   = "attack/out/auv/preference/perturbed_images"
 AUV_POP_IMG_DIR    = "attack/out/auv/popular/perturbed_images"
 AUV_RESULTS_DIR    = "attack/out/auv/results"
 AUV_RESULTS_JSON   = "attack/out/auv/results/auv_pointwise.json"
+
+
+# ===========================================================================
+# AUV-Fusion FAITHFUL diffusion generator (arXiv 2507.22880, Module 2). Real pretrained
+# Stable Diffusion: VAE-encode -> forward-diffuse -> inject latent delta -> DDIM-reverse
+# (empty text) -> VAE-decode, with composite loss L_align + L_CLIP + L_SSIM. delta is the
+# 4x28x28 latent perturbation, optimized per image (deviation: paper uses an amortized MLP
+# from a LightGCN user embedding). Needs `pip install diffusers transformers accelerate
+# safetensors`; weights auto-download via from_pretrained (China: export HF_ENDPOINT=
+# https://hf-mirror.com). AUV_DIFF_SD_MODEL may be a local path.
+# ===========================================================================
+AUV_DIFF_SD_MODEL   = "stable-diffusion-v1-5/stable-diffusion-v1-5"  # HF id (vae/unet/scheduler) or local path
+AUV_DIFF_MODE       = "ddim"      # "ddim": faithful encode->diffuse->inject->DDIM-reverse->decode | "vae": fast (no denoise loop)
+AUV_DIFF_STEPS      = 20          # DDIM inference steps
+AUV_DIFF_INJECT     = 10          # inject at this step index; reverse runs from here to 0 (fewer steps = less memory/time)
+AUV_DIFF_ETA        = 1.0         # latent perturbation scale
+AUV_DIFF_OPT_STEPS  = 30          # Adam steps on the latent delta, per image
+AUV_DIFF_LR         = 0.05
+AUV_DIFF_LAT_REG    = 1e-2        # L2 on the latent delta (budget/stealth)
+AUV_DIFF_LAMBDA_ALIGN = 1.0       # pull toward target (effectiveness)
+AUV_DIFF_LAMBDA_CLIP  = 0.5       # semantic preservation (stay near original CLIP feat)
+AUV_DIFF_LAMBDA_SSIM  = 0.3       # structural similarity to original
+AUV_DIFF_ALIGNER    = "clip"      # "clip": white-box VIP5 encoder (informative ceiling). resnet (encoder-blind) = future
+AUV_DIFF_TARGET_MODE = "popular"  # "popular": top-K centroid (best target per ablation) | "preference"
+
+AUV_DIFF_OUT_DIR       = "attack/out/auv_diff"
+AUV_DIFF_POIS_FEAT_DIR = "attack/out/auv_diff/poisoned_features/{split}".format(split=SPLIT)
+AUV_DIFF_PERT_IMG_DIR  = "attack/out/auv_diff/perturbed_images"
+AUV_DIFF_RESULTS_DIR   = "attack/out/auv_diff/results"
+AUV_DIFF_RESULTS_JSON  = "attack/out/auv_diff/results/auv_diff_pointwise.json"
