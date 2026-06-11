@@ -10,7 +10,9 @@ perturb only the *style* of the cover:
     (spatially-varying recolor, but low-frequency -> no high-freq content edits)
 
 So the change is content-preserving and visually plausible (like SPAF restyling a
-product) and UNBOUNDED in pixel L-inf. We optimize the style params WHITE-BOX
+product). Naturalness (SPAF's imperceptibility) is enforced with TV + magnitude
+regularization and a per-pixel color-range cap (STYLE_DELTA_CAP; None = unbounded).
+We optimize the style params WHITE-BOX
 through the victim's REAL CLIP toward the SAME popular centroid as pgd_attack.py,
 then evaluate with the SAME pointwise B-1 eval -- and put PGD and STYLE in one
 table. This quantifies how much the *style axis* can move VIP5 vs full-freedom
@@ -47,10 +49,20 @@ def _dirs():
         os.makedirs(d, exist_ok=True)
 
 
+def _tv(d):
+    """Total variation of a (C,H,W) perturbation -> smoothness (anti-blotch)."""
+    return ((d[:, 1:, :] - d[:, :-1, :]).abs().mean()
+            + (d[:, :, 1:] - d[:, :, :-1]).abs().mean())
+
+
 def style_attack_image(x0, centroid, normalize, device,
                        grid=C.STYLE_GRID, steps=C.STYLE_STEPS, lr=C.STYLE_LR,
-                       reg=C.STYLE_REG, loss=C.STYLE_LOSS):
-    """x0: (3,224,224) in [0,1]. Optimize style params -> return x_adv (3,224,224) [0,1]."""
+                       reg=C.STYLE_REG, tv=C.STYLE_TV, mag=C.STYLE_MAG,
+                       cap=C.STYLE_DELTA_CAP, loss=C.STYLE_LOSS):
+    """x0: (3,224,224) in [0,1]. Optimize style params -> return x_adv (3,224,224) [0,1].
+
+    Naturalness: TV (smooth recolor) + magnitude penalty (anti-oversaturation) + an
+    optional per-pixel color-range cap on |x'-x0| (cap=None -> unbounded, old run)."""
     x0 = x0.to(device)
     ch = x0.shape[0]
     hw = x0.shape[-2:]
@@ -63,17 +75,23 @@ def style_attack_image(x0, centroid, normalize, device,
     def styled():
         gup = F.interpolate(gfield, size=hw, mode="bilinear", align_corners=False)[0]
         bup = F.interpolate(bfield, size=hw, mode="bilinear", align_corners=False)[0]
-        return ((gamma + gup) * x0 + (beta + bup)).clamp(0, 1)
+        d = (gamma + gup) * x0 + (beta + bup) - x0          # the recolor delta
+        if cap is not None:
+            d = d.clamp(-cap, cap)                          # color-range constraint
+        return (x0 + d).clamp(0, 1)
 
     for _ in range(steps):
         opt.zero_grad()
-        feat = CE.encode_pixels(styled().unsqueeze(0), normalize=normalize, device=device)
+        x = styled()
+        feat = CE.encode_pixels(x.unsqueeze(0), normalize=normalize, device=device)
         if loss == "l2":
-            L = ((feat - centroid) ** 2).sum()
+            Lc = ((feat - centroid) ** 2).sum()
         else:  # cosine: minimize (1 - cos) == maximize cos
-            L = 1.0 - F.cosine_similarity(feat, centroid).mean()
-        reg_t = ((gamma - 1) ** 2).sum() + (beta ** 2).sum() + (gfield ** 2).sum() + (bfield ** 2).sum()
-        (L + reg * reg_t).backward()
+            Lc = 1.0 - F.cosine_similarity(feat, centroid).mean()
+        d = x - x0                                          # realized change (post cap/clamp)
+        Lp = ((gamma - 1) ** 2).sum() + (beta ** 2).sum() + (gfield ** 2).sum() + (bfield ** 2).sum()
+        L = Lc + reg * Lp + mag * (d ** 2).mean() + tv * _tv(d)
+        L.backward()
         opt.step()
     with torch.no_grad():
         return styled().detach()
