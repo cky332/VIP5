@@ -34,6 +34,7 @@ Outputs under attack/out/auv_diff/ ; table: clean | pgd | style | auv | auv_diff
 import os
 import sys
 import json
+import glob
 
 import numpy as np
 import torch
@@ -60,9 +61,14 @@ def load_sd(device=None):
     try:
         from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler
     except Exception as e:
-        raise RuntimeError("diffusers not installed -- `pip install diffusers transformers "
-                           "accelerate safetensors` (and `export HF_ENDPOINT=https://hf-mirror.com` "
-                           "on a China network).") from e
+        raise RuntimeError(
+            "Failed to import diffusers in THIS env (%s). This is a hard version conflict: VIP5 pins "
+            "transformers==4.17 + old huggingface_hub, but modern diffusers needs newer transformers/"
+            "hub -- they cannot coexist. Do NOT run diffusion in the VIP5 env. Instead use the decoupled "
+            "two-env flow:  (1) `python attack/auv_diffusion.py export`  here (VIP5 env);  (2) in a SEPARATE "
+            "conda env (`pip install torch diffusers transformers open_clip_torch safetensors`, "
+            "`export HF_ENDPOINT=https://hf-mirror.com`) run `python attack/auv_diffusion_gen.py`;  "
+            "(3) `python attack/auv_diffusion.py eval` back here." % e) from e
     mid = C.AUV_DIFF_SD_MODEL
     try:
         vae = AutoencoderKL.from_pretrained(mid, subfolder="vae")
@@ -256,10 +262,77 @@ def evaluate(ctx):
           % (agg.get("clean", {}).get("n", 0), n_skip, C.AUV_DIFF_RESULTS_JSON))
 
 
-def main():
-    ctx = common.load_context(need_model=True)
-    generate(ctx)
+def export(ctx):
+    """(VIP5 env, no diffusers) Write {asin: abs_image_path} for the targets + check centroid,
+    so the standalone generator (separate env) knows which covers to attack and toward what."""
+    os.makedirs(C.AUV_DIFF_OUT_DIR, exist_ok=True)
+    item2img = CE.load_item2img()
+    seen, out, skipped = set(), {}, 0
+    for it in PGD.test_positive_items(ctx.dataset):
+        a = common.asin_of(ctx.dataset, it)
+        if a in seen:
+            continue
+        seen.add(a)
+        ip = CE.resolve_image_path(a, item2img)
+        if ip is None:
+            skipped += 1
+            continue
+        out[a] = os.path.abspath(ip)
+    json.dump(out, open(C.AUV_DIFF_TARGETS_JSON, "w"), indent=0)
+    print("[auv_diff] exported %d targets -> %s (skipped %d). centroid %s exists=%s"
+          % (len(out), C.AUV_DIFF_TARGETS_JSON, skipped, C.CENTROID_PATH, os.path.isfile(C.CENTROID_PATH)))
+
+
+def _png_to_tensor01(path):
+    import torch as _t
+    arr = np.asarray(Image.open(path).convert("RGB").resize((224, 224))).astype("float32") / 255.0
+    return _t.from_numpy(arr).permute(2, 0, 1).contiguous()
+
+
+def ingest_pngs(ctx):
+    """(VIP5 env) Re-extract the externally-generated adversarial PNGs through VIP5's CLIP
+    pipeline -> poisoned features, then evaluate (faithful, same eval as everything else)."""
+    normalize = common.get_clip_norm()
+    if normalize is None:
+        raise RuntimeError("CLIP_NORM unresolved; run `python attack/run_all.py clip` first.")
+    os.makedirs(C.AUV_DIFF_POIS_FEAT_DIR, exist_ok=True)
+    os.makedirs(C.CLEAN_FEAT_DIR, exist_ok=True)
+    CE.load_clip(C.DEVICE)
+    item2img = CE.load_item2img()
+    pngs = [p for p in glob.glob(os.path.join(C.AUV_DIFF_PERT_IMG_DIR, "*.png"))
+            if not os.path.basename(p).startswith(("compare_", "grid"))]
+    if not pngs:
+        raise RuntimeError("no PNGs in %s -- run auv_diffusion_gen.py (separate env) first."
+                           % C.AUV_DIFF_PERT_IMG_DIR)
+    done = 0
+    for p in pngs:
+        a = os.path.basename(p)[:-4]
+        x_adv = _png_to_tensor01(p).to(C.DEVICE)
+        with torch.no_grad():
+            feat = CE.encode_pixels(x_adv.unsqueeze(0), normalize=normalize, device=C.DEVICE)[0]
+        np.save(os.path.join(C.AUV_DIFF_POIS_FEAT_DIR, a + ".npy"), feat.cpu().numpy().astype("float32"))
+        if not os.path.isfile(os.path.join(C.CLEAN_FEAT_DIR, a + ".npy")):   # clean baseline if missing
+            ip = CE.resolve_image_path(a, item2img)
+            if ip is not None:
+                x0 = CE.preprocess_to_224(Image.open(ip)).to(C.DEVICE)
+                with torch.no_grad():
+                    cf = CE.encode_pixels(x0.unsqueeze(0), normalize=normalize, device=C.DEVICE)[0]
+                np.save(os.path.join(C.CLEAN_FEAT_DIR, a + ".npy"), cf.cpu().numpy().astype("float32"))
+        done += 1
+    print("[auv_diff] ingested %d PNGs -> %s" % (done, C.AUV_DIFF_POIS_FEAT_DIR))
     evaluate(ctx)
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "run"
+    ctx = common.load_context(need_model=(mode != "export"))
+    if mode == "export":
+        export(ctx)
+    elif mode in ("eval", "ingest"):
+        ingest_pngs(ctx)
+    else:                                  # "run": in-process (only if diffusers works in THIS env; usually it won't)
+        generate(ctx)
+        evaluate(ctx)
 
 
 if __name__ == "__main__":
