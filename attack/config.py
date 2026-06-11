@@ -177,3 +177,32 @@ STYLE_POIS_FEAT_DIR  = "attack/out/style/poisoned_features/{split}".format(split
 STYLE_PERT_IMG_DIR   = "attack/out/style/perturbed_images"
 STYLE_RESULTS_DIR    = "attack/out/style/results"
 STYLE_RESULTS_JSON   = "attack/out/style/results/style_pointwise.json"
+
+
+# ===========================================================================
+# AUV-Fusion (arXiv 2507.22880) — adaptation to VIP5. Ports its two genuinely
+# portable pieces (the diffusion generator needs SD weights, swapped for our proven
+# smooth latent generator; addable behind `diffusers` later):
+#   1) high-order USER-PREFERENCE target (GCN-lite: engagement-weighted CLIP centroid
+#      from partial interaction data) instead of plain popularity, and
+#   2) composite stealth loss  L_align + L_CLIP-fidelity + L_SSIM,
+# optimized WHITE-BOX through VIP5's real CLIP (encoder-blind transfer hits the known
+# cross-encoder wall, so white-box is the informative setting on VIP5).
+# ===========================================================================
+AUV_TARGET_MODE   = "preference"   # "preference": engagement-weighted CLIP centroid | "popular": reuse CENTROID_PATH
+AUV_STEPS         = 200
+AUV_LR            = 0.02
+AUV_LAMBDA_ALIGN  = 1.0            # pull toward the preference target (effectiveness)
+AUV_LAMBDA_CLIP   = 0.5            # semantic preservation: stay near the ORIGINAL CLIP feat
+AUV_LAMBDA_SSIM   = 0.3            # structural similarity to the original cover
+AUV_TV            = 0.2            # smoothness on the recolor (reuse style)
+AUV_DELTA_CAP     = 0.12           # per-pixel |x'-x0| cap in [0,1] (~30/255); None = unbounded
+AUV_GRID          = 7             # low-res color field resolution (k x k)
+AUV_REG           = 5e-3          # L2 reg pulling style params toward identity
+
+AUV_OUT_DIR        = "attack/out/auv"
+AUV_TARGET_PATH    = "attack/out/auv/pref_target.npy"
+AUV_POIS_FEAT_DIR  = "attack/out/auv/poisoned_features/{split}".format(split=SPLIT)
+AUV_PERT_IMG_DIR   = "attack/out/auv/perturbed_images"
+AUV_RESULTS_DIR    = "attack/out/auv/results"
+AUV_RESULTS_JSON   = "attack/out/auv/results/auv_pointwise.json"
