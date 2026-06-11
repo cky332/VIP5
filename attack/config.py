@@ -167,9 +167,9 @@ STYLE_GRID      = 7          # low-res color field resolution (k x k), bilinearl
 STYLE_STEPS     = 200        # Adam steps (match PGD_STEPS for a fair comparison)
 STYLE_LR        = 0.02       # Adam lr on the style params
 STYLE_REG       = 5e-3       # L2 reg pulling params toward identity (tightened for naturalness)
-STYLE_TV        = 0.1        # total-variation reg on the realized recolor (smooth, anti-blotch)
-STYLE_MAG       = 0.5        # magnitude reg mean(delta^2) on the recolor (anti-oversaturation)
-STYLE_DELTA_CAP = 0.25       # per-pixel |x'-x0| cap in [0,1] (~64/255); None = unbounded (old run)
+STYLE_TV        = 0.2        # total-variation reg on the realized recolor (smooth, anti-blotch)
+STYLE_MAG       = 2.0        # magnitude reg mean(delta^2) on the recolor (anti-oversaturation)
+STYLE_DELTA_CAP = 0.12       # per-pixel |x'-x0| cap in [0,1] (~30/255); None = unbounded (old run)
 STYLE_LOSS      = "cosine"   # match pgd target objective ("cosine" or "l2")
 
 STYLE_OUT_DIR        = "attack/out/style"
