@@ -1,4 +1,4 @@
-"""Attack (5): AUV-Fusion (arXiv 2507.22880) adapted to VIP5.
+"""Attack (5): AUV-Fusion (arXiv 2507.22880) adapted to VIP5 -- TARGET ablation.
 
 AUV-Fusion is a black-box, item-representation attack on visually-aware recommenders
 that (1) models high-order USER PREFERENCE from interaction data (LightGCN) to build a
@@ -6,29 +6,23 @@ target, and (2) generates a visually-plausible adversarial cover via a diffusion
 trained with L_align + L_CLIP + L_SSIM. Its victims are classic MF VARS (VBPR/DVBPR/AMR).
 
 VIP5 is a generative LLM recommender consuming a pooled CLIP ViT-B/32 feature, with no
-dot-product user/item score -- and AUV-Fusion's encoder-blind transfer (ResNet aligner
--> victim) hits the same cross-encoder wall we measured for X-Transfer/AnyAttack. So we
-port the two genuinely transferable pieces, adapted to VIP5:
+dot-product user/item score -- and AUV-Fusion's encoder-blind transfer hits the same
+cross-encoder wall we measured for X-Transfer/AnyAttack. So we port the two transferable
+pieces and run them WHITE-BOX through VIP5's REAL CLIP, with the SAME smooth latent
+generator (affine + bilinear color field + color-range cap) and the SAME composite loss
+L_align + L_CLIP-fidelity + L_SSIM -- the only thing that changes is the TARGET:
 
-  1) PREFERENCE TARGET (GCN-lite): an engagement-weighted centroid of CLIP features over
-     the items real users interacted with (partial interaction data), instead of plain
-     popularity. (Set AUV_TARGET_MODE="popular" to reuse the top-K popularity centroid.)
-  2) COMPOSITE STEALTH LOSS: L_align (pull toward the preference target) + L_CLIP
-     (stay near the ORIGINAL CLIP feature) + L_SSIM (structural fidelity),
+  * "preference": GCN-lite engagement-weighted CLIP centroid over items real users
+    interacted with (AUV-Fusion's idea), vs
+  * "popular":    the top-K popularity centroid (what pgd/style aim at).
 
-optimized WHITE-BOX through VIP5's REAL CLIP. The image generator is the proven smooth
-latent generator from style_attack (per-channel affine + bilinearly-upsampled color
-field + color-range cap); the real diffusion generator is the one remaining heavy piece
-(needs SD weights) and can be swapped in behind `diffusers` later.
+Running both isolates AUV-Fusion's target contribution on VIP5. The real diffusion
+generator is the one heavy piece left out (needs SD weights; swappable behind `diffusers`).
 
-Run (after the `clip` + `centroid` stages, like pgd_attack.py):
+Run (after the `clip` + `centroid` stages):
     python attack/auv_attack.py
-Outputs:
-    attack/out/auv/pref_target.npy                       (cached preference target)
-    attack/out/clean_features/<split>/<asin>.npy         (re-extracted clean; shared w/ pgd)
-    attack/out/auv/poisoned_features/<split>/<asin>.npy
-    attack/out/auv/perturbed_images/<asin>.png
-    attack/out/auv/results/auv_pointwise.json
+Outputs per mode under attack/out/auv/<mode>/ ; one combined table:
+    clean | pgd | style | auv_preference | auv_popular
 """
 import os
 import sys
@@ -49,32 +43,28 @@ import eval_pointwise as EP       # reuse run_pointwise / _print_table
 import feature_source as FS       # reuse clean_pgd / poisoned (clean & PGD columns)
 
 
-def _dirs():
-    for d in (C.AUV_OUT_DIR, C.AUV_POIS_FEAT_DIR, C.AUV_PERT_IMG_DIR,
-              C.AUV_RESULTS_DIR, C.CLEAN_FEAT_DIR):
-        os.makedirs(d, exist_ok=True)
+def _mode_paths(mode):
+    base = os.path.join(C.AUV_OUT_DIR, mode)
+    return {"base": base,
+            "target": os.path.join(base, "target.npy"),
+            "pois": os.path.join(base, "poisoned_features", C.SPLIT),
+            "img": os.path.join(base, "perturbed_images")}
 
 
 # ---------------------------------------------------------------------------
-# (1) high-order user-preference target  (GCN-lite engagement-weighted centroid)
+# target builders
 # ---------------------------------------------------------------------------
-def build_pref_target(ctx, normalize, device=None):
+def _preference_target(ctx, normalize, device, cache_path):
     """Engagement-weighted centroid of CLIP features over interacted items (cached)."""
-    device = device or C.DEVICE
-    if C.AUV_TARGET_MODE == "popular":
-        c = np.load(C.CENTROID_PATH).astype("float32")
+    if os.path.isfile(cache_path):
+        c = np.load(cache_path).astype("float32")
         return torch.from_numpy(c).to(device).view(1, -1)
-    if os.path.isfile(C.AUV_TARGET_PATH):
-        c = np.load(C.AUV_TARGET_PATH).astype("float32")
-        return torch.from_numpy(c).to(device).view(1, -1)
-
     CE.load_clip(device)
     item2img = CE.load_item2img()
     freq = Counter()
     for _u, items in common.iter_test_users(ctx.dataset, C.N_TEST_USERS):
         for it in items[:-1]:                       # histories (exclude held-out positive)
             freq[str(it)] += 1
-
     acc, wsum, used = None, 0.0, 0
     for it, w in freq.items():
         asin = common.asin_of(ctx.dataset, it)
@@ -93,13 +83,22 @@ def build_pref_target(ctx, normalize, device=None):
         raise RuntimeError("preference target empty (no resolvable history images)")
     tgt = acc / wsum
     tgt = tgt / tgt.norm().clamp_min(1e-8)
-    np.save(C.AUV_TARGET_PATH, tgt.cpu().numpy().astype("float32"))
-    print("[auv] preference target built from %d unique items -> %s" % (used, C.AUV_TARGET_PATH))
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    np.save(cache_path, tgt.cpu().numpy().astype("float32"))
+    print("[auv] preference target built from %d unique items -> %s" % (used, cache_path))
     return tgt.view(1, -1)
 
 
+def build_target(ctx, normalize, mode, paths, device=None):
+    device = device or C.DEVICE
+    if mode == "popular":
+        c = np.load(C.CENTROID_PATH).astype("float32")
+        return torch.from_numpy(c).to(device).view(1, -1)
+    return _preference_target(ctx, normalize, device, paths["target"])
+
+
 # ---------------------------------------------------------------------------
-# (2) composite-loss white-box attack through VIP5's real CLIP
+# composite-loss white-box attack through VIP5's real CLIP
 # ---------------------------------------------------------------------------
 def _tv(d):
     return ((d[:, 1:, :] - d[:, :-1, :]).abs().mean()
@@ -120,7 +119,7 @@ def _ssim(x, y, win=11, c1=0.01 ** 2, c2=0.03 ** 2):
     return ssim.mean()
 
 
-def auv_attack_image(x0, pref_target, clean_feat, normalize, device,
+def auv_attack_image(x0, target, clean_feat, normalize, device,
                      grid=C.AUV_GRID, steps=C.AUV_STEPS, lr=C.AUV_LR,
                      la=C.AUV_LAMBDA_ALIGN, lc=C.AUV_LAMBDA_CLIP, ls=C.AUV_LAMBDA_SSIM,
                      tv=C.AUV_TV, reg=C.AUV_REG, cap=C.AUV_DELTA_CAP):
@@ -146,7 +145,7 @@ def auv_attack_image(x0, pref_target, clean_feat, normalize, device,
         opt.zero_grad()
         x = styled()
         feat = CE.encode_pixels(x.unsqueeze(0), normalize=normalize, device=device)
-        L_align = 1.0 - F.cosine_similarity(feat, pref_target).mean()
+        L_align = 1.0 - F.cosine_similarity(feat, target).mean()
         L_clip = ((feat - cf) ** 2).mean()
         L_ssim = 1.0 - _ssim(x, x0)
         d = x - x0
@@ -164,19 +163,17 @@ def _save_png(x_chw, path):
 
 
 # ---------------------------------------------------------------------------
-# generation
+# generation (one mode)
 # ---------------------------------------------------------------------------
-def generate(ctx):
-    normalize = common.get_clip_norm()
-    if normalize is None:
-        raise RuntimeError("CLIP_NORM unresolved; run `python attack/run_all.py clip` first.")
-    if C.AUV_TARGET_MODE == "popular" and not os.path.isfile(C.CENTROID_PATH):
-        raise RuntimeError("centroid missing; run build_centroid.py first (or use preference mode).")
-    _dirs()
-    pref = build_pref_target(ctx, normalize)
-    cb_t = F.cosine_similarity(pref, PGD._centroid_tensor(C.DEVICE)).item() \
-        if os.path.isfile(C.CENTROID_PATH) else float("nan")
-    print("[auv] target mode=%s | cos(pref, popular_centroid)=%.3f" % (C.AUV_TARGET_MODE, cb_t))
+def generate_mode(ctx, normalize, mode):
+    paths = _mode_paths(mode)
+    for d in (paths["pois"], paths["img"], C.AUV_RESULTS_DIR, C.CLEAN_FEAT_DIR):
+        os.makedirs(d, exist_ok=True)
+    target = build_target(ctx, normalize, mode, paths)
+    if os.path.isfile(C.CENTROID_PATH):
+        pop = PGD._centroid_tensor(C.DEVICE)
+        print("[auv:%s] cos(target, popular_centroid) = %.3f"
+              % (mode, F.cosine_similarity(target, pop).item()))
     CE.load_clip(C.DEVICE)
     item2img = CE.load_item2img()
 
@@ -194,66 +191,70 @@ def generate(ctx):
         x0 = CE.preprocess_to_224(Image.open(ip)).to(C.DEVICE)
         with torch.no_grad():
             clean_feat = CE.encode_pixels(x0.unsqueeze(0), normalize=normalize, device=C.DEVICE)[0]
-        x_adv = auv_attack_image(x0, pref, clean_feat, normalize, C.DEVICE)
+        x_adv = auv_attack_image(x0, target, clean_feat, normalize, C.DEVICE)
         with torch.no_grad():
             pois_feat = CE.encode_pixels(x_adv.unsqueeze(0), normalize=normalize, device=C.DEVICE)[0]
-            ca = F.cosine_similarity(pois_feat.view(1, -1), pref).item()
-            cb = F.cosine_similarity(clean_feat.view(1, -1), pref).item()
+            ca = F.cosine_similarity(pois_feat.view(1, -1), target).item()
+            cb = F.cosine_similarity(clean_feat.view(1, -1), target).item()
             dd = (x_adv - x0).abs()
             linf, meanabs = dd.max().item() * 255, dd.mean().item() * 255
         np.save(os.path.join(C.CLEAN_FEAT_DIR, a + ".npy"), clean_feat.cpu().numpy().astype("float32"))
-        np.save(os.path.join(C.AUV_POIS_FEAT_DIR, a + ".npy"), pois_feat.cpu().numpy().astype("float32"))
-        _save_png(x_adv, os.path.join(C.AUV_PERT_IMG_DIR, a + ".png"))
-        rows.append({"asin": a, "cos_pref_before": cb, "cos_pref_after": ca,
+        np.save(os.path.join(paths["pois"], a + ".npy"), pois_feat.cpu().numpy().astype("float32"))
+        _save_png(x_adv, os.path.join(paths["img"], a + ".png"))
+        rows.append({"asin": a, "cos_before": cb, "cos_after": ca,
                      "linf_/255": linf, "meanabs_/255": meanabs})
-        if len(rows) % 25 == 0:
-            print("[auv] %d done | last cos(pref) %.3f->%.3f | linf %.0f/255 mean %.1f/255"
-                  % (len(rows), cb, ca, linf, meanabs))
+        if len(rows) % 50 == 0:
+            print("[auv:%s] %d done | last cos %.3f->%.3f | linf %.0f mean %.1f"
+                  % (mode, len(rows), cb, ca, linf, meanabs))
 
-    summ = {"n": len(rows), "skipped_no_image": skipped, "target_mode": C.AUV_TARGET_MODE,
-            "mean_cos_pref_before": float(np.mean([r["cos_pref_before"] for r in rows])) if rows else None,
-            "mean_cos_pref_after": float(np.mean([r["cos_pref_after"] for r in rows])) if rows else None,
+    summ = {"mode": mode, "n": len(rows), "skipped_no_image": skipped,
+            "mean_cos_before": float(np.mean([r["cos_before"] for r in rows])) if rows else None,
+            "mean_cos_after": float(np.mean([r["cos_after"] for r in rows])) if rows else None,
             "mean_linf_/255": float(np.mean([r["linf_/255"] for r in rows])) if rows else None,
             "mean_meanabs_/255": float(np.mean([r["meanabs_/255"] for r in rows])) if rows else None}
     json.dump({"summary": summ, "rows": rows},
-              open(os.path.join(C.AUV_RESULTS_DIR, "auv_generate.json"), "w"), indent=2)
-    print("[auv] generation done:", json.dumps(summ, indent=2))
+              open(os.path.join(C.AUV_RESULTS_DIR, "auv_generate_%s.json" % mode), "w"), indent=2)
+    print("[auv:%s] generation done:" % mode, json.dumps(summ, indent=2))
     return summ
 
 
 # ---------------------------------------------------------------------------
-# evaluation -> clean | pgd | style (if present) | auv
+# evaluation -> clean | pgd | style (if present) | auv_<mode> for each present mode
 # ---------------------------------------------------------------------------
-def _auv_fn(asin, clean):
-    return FS._load(os.path.join(C.AUV_POIS_FEAT_DIR, asin + ".npy"))
+def _loader(pois_dir):
+    return lambda asin, clean: FS._load(os.path.join(pois_dir, asin + ".npy"))
 
 
-def _has(d, asin):
-    return os.path.isfile(os.path.join(d, asin + ".npy"))
+def _dir_has_npy(d):
+    return os.path.isdir(d) and any(f.endswith(".npy") for f in os.listdir(d))
 
 
 def evaluate(ctx):
     os.makedirs(C.AUV_RESULTS_DIR, exist_ok=True)
-    have_pgd = os.path.isdir(C.POISONED_FEAT_DIR) and any(
-        f.endswith(".npy") for f in os.listdir(C.POISONED_FEAT_DIR))
-    have_style = os.path.isdir(C.STYLE_POIS_FEAT_DIR) and any(
-        f.endswith(".npy") for f in os.listdir(C.STYLE_POIS_FEAT_DIR))
+    have_pgd = _dir_has_npy(C.POISONED_FEAT_DIR)
+    have_style = _dir_has_npy(C.STYLE_POIS_FEAT_DIR)
+    modes = [m for m in C.AUV_TARGET_MODES if _dir_has_npy(_mode_paths(m)["pois"])]
 
     attacked = {}
     if have_pgd:
         attacked["pgd"] = lambda asin, clean: FS.poisoned(asin)
     if have_style:
-        attacked["style"] = lambda asin, clean: FS._load(os.path.join(C.STYLE_POIS_FEAT_DIR, asin + ".npy"))
-    attacked["auv"] = _auv_fn
+        attacked["style"] = _loader(C.STYLE_POIS_FEAT_DIR)
+    for m in modes:
+        attacked["auv_%s" % m] = _loader(_mode_paths(m)["pois"])
 
     def require(asin):
-        return (_has(C.AUV_POIS_FEAT_DIR, asin)
-                and (FS.has_poisoned(asin) if have_pgd else True)
-                and (_has(C.STYLE_POIS_FEAT_DIR, asin) if have_style else True))
+        ok = all(os.path.isfile(os.path.join(_mode_paths(m)["pois"], asin + ".npy")) for m in modes)
+        if have_pgd:
+            ok = ok and FS.has_poisoned(asin)
+        if have_style:
+            ok = ok and os.path.isfile(os.path.join(C.STYLE_POIS_FEAT_DIR, asin + ".npy"))
+        return ok
 
     agg, n_skip = EP.run_pointwise(ctx, FS.clean_pgd, attacked, require=require)
-    order = ["clean"] + (["pgd"] if have_pgd else []) + (["style"] if have_style else []) + ["auv"]
-    print("\n=== AUV-Fusion (pref-target + composite loss) vs baselines — direct recommendation (B-1, n=%d) ==="
+    order = (["clean"] + (["pgd"] if have_pgd else []) + (["style"] if have_style else [])
+             + ["auv_%s" % m for m in modes])
+    print("\n=== AUV-Fusion target ablation (same generator+composite loss) — B-1, n=%d ==="
           % C.N_TEST_USERS)
     EP._print_table(agg, order=order)
     json.dump(agg, open(C.AUV_RESULTS_JSON, "w"), indent=2)
@@ -263,7 +264,13 @@ def evaluate(ctx):
 
 def main():
     ctx = common.load_context(need_model=True)
-    generate(ctx)
+    normalize = common.get_clip_norm()
+    if normalize is None:
+        raise RuntimeError("CLIP_NORM unresolved; run `python attack/run_all.py clip` first.")
+    if not os.path.isfile(C.CENTROID_PATH):
+        raise RuntimeError("centroid missing; run build_centroid.py first.")
+    for mode in C.AUV_TARGET_MODES:
+        generate_mode(ctx, normalize, mode)
     evaluate(ctx)
 
 
