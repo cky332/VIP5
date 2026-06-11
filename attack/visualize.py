@@ -44,6 +44,7 @@ SRC_DIRS = {
     "xt": C.XT_PERT_IMG_DIR,
     "aa": C.AA_PERT_IMG_DIR,
     "style": C.STYLE_PERT_IMG_DIR,
+    "auv": C.AUV_PERT_IMG_DIR,
 }
 
 
