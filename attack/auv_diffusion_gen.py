@@ -141,9 +141,21 @@ def attack(x0, vae, unet, scheduler, clip_feat, target, device):
     return x[0].detach()
 
 
+_PRE = None
+
+
 def _img01(path):
-    arr = np.asarray(Image.open(path).convert("RGB").resize((224, 224))).astype("float32") / 255.0
-    return torch.from_numpy(arr).permute(2, 0, 1).contiguous()
+    """Match VIP5's preprocess_to_224 EXACTLY (Resize(224,BICUBIC)+CenterCrop(224)+ToTensor),
+    so the generator's x0 == the eval's x0 -> the cap and the attack are measured consistently."""
+    global _PRE
+    if _PRE is None:
+        from torchvision import transforms as T
+        try:
+            bic = T.InterpolationMode.BICUBIC
+        except Exception:
+            bic = Image.BICUBIC
+        _PRE = T.Compose([T.Resize(224, interpolation=bic), T.CenterCrop(224), T.ToTensor()])
+    return _PRE(Image.open(path).convert("RGB"))
 
 
 def _save(x_chw, path):
