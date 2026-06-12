@@ -224,6 +224,7 @@ AUV_DIFF_ETA        = 1.0         # latent perturbation scale
 AUV_DIFF_OPT_STEPS  = 30          # Adam steps on the latent delta, per image
 AUV_DIFF_LR         = 0.05
 AUV_DIFF_LAT_REG    = 1e-2        # L2 on the latent delta (budget/stealth)
+AUV_DIFF_PIX_CAP    = 0.12        # per-pixel |x_adv-x0| L-inf cap in [0,1] (~30/255, matches style); None = unbounded
 AUV_DIFF_LAMBDA_ALIGN = 1.0       # pull toward target (effectiveness)
 AUV_DIFF_LAMBDA_CLIP  = 0.5       # semantic preservation (stay near original CLIP feat)
 AUV_DIFF_LAMBDA_SSIM  = 0.3       # structural similarity to original
