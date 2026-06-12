@@ -229,10 +229,11 @@ AUV_DIFF_LAMBDA_ALIGN = 1.0       # pull toward target (effectiveness)
 AUV_DIFF_LAMBDA_CLIP  = 0.5       # semantic preservation (stay near original CLIP feat)
 AUV_DIFF_LAMBDA_SSIM  = 0.3       # structural similarity to original
 AUV_DIFF_ALIGNER    = "clip"      # "clip": white-box VIP5 encoder (informative ceiling). resnet (encoder-blind) = future
-AUV_DIFF_TARGET_MODE = "popular"  # "popular": top-K centroid (best target per ablation) | "preference"
+AUV_DIFF_TARGET_MODE = "top1"     # "top1": single MOST-popular item's embedding (default) | "mean": top-K centroid | "preference"
 
 AUV_DIFF_OUT_DIR       = "attack/out/auv_diff"
 AUV_DIFF_TARGETS_JSON  = "attack/out/auv_diff/targets.json"   # exported {asin: image_path} for the standalone generator
+AUV_DIFF_TARGET_PATH   = "attack/out/auv_diff/target.npy"     # exported attack TARGET embedding (top1/mean/preference) the generator pulls toward
 AUV_DIFF_POIS_FEAT_DIR = "attack/out/auv_diff/poisoned_features/{split}".format(split=SPLIT)
 AUV_DIFF_PERT_IMG_DIR  = "attack/out/auv_diff/perturbed_images"
 AUV_DIFF_RESULTS_DIR   = "attack/out/auv_diff/results"

@@ -148,11 +148,9 @@ def attack_image(x0, target, clean_feat, models, normalize, device):
 # generation + eval
 # ---------------------------------------------------------------------------
 def _target(ctx, normalize):
-    if C.AUV_DIFF_TARGET_MODE == "popular":
-        c = np.load(C.CENTROID_PATH).astype("float32")
-        return torch.from_numpy(c).to(C.DEVICE).view(1, -1)
-    paths = AUV._mode_paths("preference")
-    return AUV.build_target(ctx, normalize, "preference", paths)
+    p = C.AUV_DIFF_TARGET_PATH if os.path.isfile(C.AUV_DIFF_TARGET_PATH) else C.CENTROID_PATH
+    c = np.load(p).astype("float32")
+    return torch.from_numpy(c).to(C.DEVICE).view(1, -1)
 
 
 def _save_png(x_chw, path):
@@ -279,8 +277,41 @@ def export(ctx):
             continue
         out[a] = os.path.abspath(ip)
     json.dump(out, open(C.AUV_DIFF_TARGETS_JSON, "w"), indent=0)
-    print("[auv_diff] exported %d targets -> %s (skipped %d). centroid %s exists=%s"
-          % (len(out), C.AUV_DIFF_TARGETS_JSON, skipped, C.CENTROID_PATH, os.path.isfile(C.CENTROID_PATH)))
+    print("[auv_diff] exported %d targets -> %s (skipped %d)." % (len(out), C.AUV_DIFF_TARGETS_JSON, skipped))
+    _export_target(ctx)
+
+
+def _export_target(ctx):
+    """Build the attack TARGET embedding (VIP5's CLIP space) and save it for the generator.
+    AUV_DIFF_TARGET_MODE: 'top1' = single most-popular item's embedding | 'mean' = top-K centroid |
+    'preference' = engagement-weighted centroid."""
+    import build_centroid as BC
+    normalize = common.get_clip_norm()
+    if normalize is None:
+        normalize = True
+    mode = C.AUV_DIFF_TARGET_MODE
+    if mode == "mean":
+        if not os.path.isfile(C.CENTROID_PATH):
+            raise RuntimeError("centroid.npy missing; run build_centroid.py or use top1.")
+        tgt, info = np.load(C.CENTROID_PATH).astype("float32"), {"mode": "mean", "src": C.CENTROID_PATH}
+    elif mode == "preference":
+        t = AUV.build_target(ctx, normalize, "preference", AUV._mode_paths("preference"))
+        tgt, info = t.view(-1).cpu().numpy().astype("float32"), {"mode": "preference"}
+    else:                                              # top1 (default): the single MOST-popular item
+        CE.load_clip(C.DEVICE)
+        item2img = CE.load_item2img()
+        item_str, cnt = BC.topk_popular(ctx.dataset, 1)[0]
+        asin = common.asin_of(ctx.dataset, item_str)
+        ip = CE.resolve_image_path(asin, item2img)
+        if ip is None:
+            raise RuntimeError("cannot resolve cover for top-1 item %s (asin %s)" % (item_str, asin))
+        x = CE.preprocess_to_224(Image.open(ip)).to(C.DEVICE)
+        with torch.no_grad():
+            f = CE.encode_pixels(x.unsqueeze(0), normalize=normalize, device=C.DEVICE)[0]
+        tgt = f.cpu().numpy().astype("float32")
+        info = {"mode": "top1", "item": item_str, "asin": asin, "count": cnt}
+    np.save(C.AUV_DIFF_TARGET_PATH, tgt)
+    print("[auv_diff] target -> %s | %s" % (C.AUV_DIFF_TARGET_PATH, info))
 
 
 def _png_to_tensor01(path):

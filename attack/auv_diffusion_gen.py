@@ -167,14 +167,17 @@ def main():
     if not os.path.isfile(C.AUV_DIFF_TARGETS_JSON):
         raise SystemExit("missing %s -- run `python attack/auv_diffusion.py export` in the VIP5 env first."
                          % C.AUV_DIFF_TARGETS_JSON)
-    if not os.path.isfile(C.CENTROID_PATH):
-        raise SystemExit("missing centroid %s -- build it in the VIP5 env first." % C.CENTROID_PATH)
+    tpath = C.AUV_DIFF_TARGET_PATH if os.path.isfile(C.AUV_DIFF_TARGET_PATH) else C.CENTROID_PATH
+    if not os.path.isfile(tpath):
+        raise SystemExit("missing target %s (and centroid) -- run `python attack/auv_diffusion.py export` "
+                         "in the VIP5 env first." % C.AUV_DIFF_TARGET_PATH)
     os.makedirs(C.AUV_DIFF_PERT_IMG_DIR, exist_ok=True)
     targets = json.load(open(C.AUV_DIFF_TARGETS_JSON))
-    print("[gen] %d targets | SD=%s mode=%s | device=%s" % (len(targets), C.AUV_DIFF_SD_MODEL, C.AUV_DIFF_MODE, DEVICE))
+    print("[gen] %d targets | SD=%s mode=%s | target=%s | device=%s"
+          % (len(targets), C.AUV_DIFF_SD_MODEL, C.AUV_DIFF_MODE, tpath, DEVICE))
     vae, unet, sch = _load_sd(DEVICE)
     clip_feat = _load_clip(DEVICE)
-    c = np.load(C.CENTROID_PATH).astype("float32")
+    c = np.load(tpath).astype("float32")
     target = torch.from_numpy(c).to(DEVICE).view(1, -1)
     target = target / target.norm(dim=-1, keepdim=True).clamp_min(1e-8)
 
