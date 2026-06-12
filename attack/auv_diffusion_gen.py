@@ -69,7 +69,7 @@ def _load_clip(device):
         import open_clip
     except Exception as e:
         raise SystemExit("install open_clip in THIS env: pip install open_clip_torch  (err: %s)" % e)
-    model = open_clip.create_model("ViT-B-32", pretrained="openai").to(device).eval()
+    model = open_clip.create_model("ViT-B-32-quickgelu", pretrained="openai").to(device).eval()
     for p in model.parameters():
         p.requires_grad_(False)
     mean, std = _MEAN.to(device), _STD.to(device)
