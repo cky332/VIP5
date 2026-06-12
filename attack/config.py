@@ -231,6 +231,7 @@ AUV_DIFF_ALIGNER    = "clip"      # "clip": white-box VIP5 encoder (informative 
 AUV_DIFF_TARGET_MODE = "popular"  # "popular": top-K centroid (best target per ablation) | "preference"
 
 AUV_DIFF_OUT_DIR       = "attack/out/auv_diff"
+AUV_DIFF_TARGETS_JSON  = "attack/out/auv_diff/targets.json"   # exported {asin: image_path} for the standalone generator
 AUV_DIFF_POIS_FEAT_DIR = "attack/out/auv_diff/poisoned_features/{split}".format(split=SPLIT)
 AUV_DIFF_PERT_IMG_DIR  = "attack/out/auv_diff/perturbed_images"
 AUV_DIFF_RESULTS_DIR   = "attack/out/auv_diff/results"
