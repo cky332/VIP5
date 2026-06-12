@@ -100,8 +100,16 @@ def _decode_from_delta(z_base, delta, vae, unet, scheduler, rev_ts, h, eta):
     return (x / 2 + 0.5).clamp(0, 1)
 
 
+def _pix_project(x, x0u, cap):
+    """L-inf project the decoded image to within +/-cap of the original (matched stealth budget)."""
+    if cap is None:
+        return x
+    return (x0u + (x - x0u).clamp(-cap, cap)).clamp(0, 1)
+
+
 def attack(x0, vae, unet, scheduler, clip_feat, target, device):
     x0 = x0.to(device)
+    x0u = x0.unsqueeze(0)
     with torch.no_grad():
         z0 = vae.encode((x0.unsqueeze(0) * 2 - 1)).latent_dist.mean * SCALE
         rev_ts, h, z_base = None, None, z0
@@ -117,6 +125,7 @@ def attack(x0, vae, unet, scheduler, clip_feat, target, device):
     for _ in range(C.AUV_DIFF_OPT_STEPS):
         opt.zero_grad()
         x = _decode_from_delta(z_base, delta, vae, unet, scheduler, rev_ts, h, C.AUV_DIFF_ETA)
+        x = _pix_project(x, x0u, C.AUV_DIFF_PIX_CAP)
         feat = clip_feat(x)
         fa = feat / feat.norm(dim=-1, keepdim=True).clamp_min(1e-8)
         L_align = 1.0 - (fa * target).sum(-1).mean()
@@ -128,6 +137,7 @@ def attack(x0, vae, unet, scheduler, clip_feat, target, device):
         opt.step()
     with torch.no_grad():
         x = _decode_from_delta(z_base, delta, vae, unet, scheduler, rev_ts, h, C.AUV_DIFF_ETA)
+        x = _pix_project(x, x0u, C.AUV_DIFF_PIX_CAP)
     return x[0].detach()
 
 
