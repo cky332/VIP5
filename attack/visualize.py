@@ -111,7 +111,7 @@ def make_row(asin, item2img, item2id, amp, src_dir):
     return block, stats
 
 
-def main(n=8, amp=10, which="pgd"):
+def main(n=8, amp=10, which="pgd", pick=None):
     if which in SRC_DIRS:
         src_dir = SRC_DIRS[which]
     else:
@@ -128,7 +128,15 @@ def main(n=8, amp=10, which="pgd"):
     item2id = json.load(open(C.DATAMAPS))["item2id"]
     paths = sorted(p for p in glob.glob(os.path.join(src_dir, "*.png"))
                    if not os.path.basename(p).startswith(("compare_", "grid")))
-    asins = [os.path.basename(p)[:-4] for p in paths][:n]
+    all_asins = [os.path.basename(p)[:-4] for p in paths]
+    if pick:                                   # render exactly these asins (same items across attacks)
+        avail = set(all_asins)
+        asins = [a for a in pick if a in avail]
+        miss = [a for a in pick if a not in avail]
+        if miss:
+            print("[viz] requested asins not found in %s: %s" % (src_dir, miss))
+    else:
+        asins = all_asins[:n]
 
     blocks, all_stats = [], []
     for a in asins:
@@ -166,4 +174,5 @@ if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 8
     amp = int(sys.argv[2]) if len(sys.argv) > 2 else 10
     which = sys.argv[3] if len(sys.argv) > 3 else "pgd"
-    main(n, amp, which)
+    pick = sys.argv[4].split(",") if len(sys.argv) > 4 else None   # optional: exact asins, comma-separated
+    main(n, amp, which, pick)

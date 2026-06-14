@@ -223,13 +223,21 @@ def generate(ctx):
     user_ids = users_all[:C.TPE_N_USERS]
 
     seen, pairs = set(), []
-    for it in PGD.test_positive_items(ctx.dataset):
-        a = common.asin_of(ctx.dataset, it)
-        if a in seen:
-            continue
-        seen.add(a); pairs.append((it, a))
-    if C.TPE_N_ITEMS:
-        pairs = pairs[:C.TPE_N_ITEMS]
+    if getattr(C, "TPE_ITEMS", None):                  # attack exactly these asins (e.g. the showcase covers)
+        id2 = json.load(open(C.DATAMAPS))["item2id"]
+        for a in C.TPE_ITEMS:
+            if a in id2:
+                pairs.append((id2[a], a))
+            else:
+                print("[tpe] TPE_ITEMS asin not in datamaps (skipped):", a)
+    else:
+        for it in PGD.test_positive_items(ctx.dataset):
+            a = common.asin_of(ctx.dataset, it)
+            if a in seen:
+                continue
+            seen.add(a); pairs.append((it, a))
+        if C.TPE_N_ITEMS:
+            pairs = pairs[:C.TPE_N_ITEMS]
 
     manifest, done, skipped = [], 0, 0
     for it, a in pairs:
@@ -293,6 +301,11 @@ def evaluate(ctx):
 
 
 def main():
+    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    if arg == "showcase":                       # attack exactly the 6 showcase covers (no config edit needed)
+        C.TPE_ITEMS = C.SHOWCASE_ASINS
+    elif arg:                                   # or an explicit comma-separated asin list
+        C.TPE_ITEMS = arg.split(",")
     ctx = common.load_context(need_model=True)
     generate(ctx)
     evaluate(ctx)
