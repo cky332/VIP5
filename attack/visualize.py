@@ -47,6 +47,7 @@ SRC_DIRS = {
     "auv_pref": C.AUV_PREF_IMG_DIR,
     "auv_pop": C.AUV_POP_IMG_DIR,
     "auv_diff": C.AUV_DIFF_PERT_IMG_DIR,
+    "tpe": C.TPE_PERT_IMG_DIR,
 }
 
 
