@@ -301,6 +301,11 @@ def evaluate(ctx):
 
 
 def main():
+    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    if arg == "showcase":                       # attack exactly the 6 showcase covers (no config edit needed)
+        C.TPE_ITEMS = C.SHOWCASE_ASINS
+    elif arg:                                   # or an explicit comma-separated asin list
+        C.TPE_ITEMS = arg.split(",")
     ctx = common.load_context(need_model=True)
     generate(ctx)
     evaluate(ctx)
